@@ -141,10 +141,21 @@ const useScrollManagement = (
 };
 
 /**
+ * A per-source-line annotation overlaid on the code (e.g. a DrTriton computing-redundancy
+ * finding). Keyed by absolute source line number in CodeViewerProps.annotations.
+ */
+export interface LineAnnotation {
+  severity: "high" | "med" | "low" | string; // controls the badge color
+  label: string;   // short label, e.g. "Computing redundancy"
+  detail: string;  // full text shown in the hover tooltip
+}
+
+/**
  * Props for the CodeViewer component
  */
 interface CodeViewerProps {
   code: string; // The source code to display
+  annotations?: Record<number, LineAnnotation>; // absolute line number -> annotation (badge + tooltip)
   language?: string; // The programming language for syntax highlighting
   height?: string; // Height of the code viewer container
   theme?: "light" | "dark"; // Color theme
@@ -337,6 +348,7 @@ const LargeFileViewer: React.FC<CodeViewerProps> = ({
   onScrollComplete,
   functionStartLine,
   functionEndLine,
+  annotations,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 });
@@ -513,6 +525,9 @@ const LargeFileViewer: React.FC<CodeViewerProps> = ({
               const isFunctionStart = actualLine === functionStartLine;
               const isFunctionEnd = actualLine === functionEndLine;
 
+              // DrTriton overlay
+              const ann = annotations?.[actualLine];
+
               // Create styles for the line (no colors - handled by CSS classes)
               const style: React.CSSProperties = {
                 display: "block",
@@ -524,13 +539,16 @@ const LargeFileViewer: React.FC<CodeViewerProps> = ({
                 isHighlighted ? 'highlighted-line' : '',
                 isInFunctionRange ? 'function-range' : '',
                 isFunctionStart ? 'function-range-start' : '',
-                isFunctionEnd ? 'function-range-end' : ''
+                isFunctionEnd ? 'function-range-end' : '',
+                ann ? 'annotated-line' : '',
+                ann ? `annotated-${ann.severity}` : ''
               ].filter(Boolean).join(' ');
 
               return {
                 style,
                 onClick: () => handleLineClick(actualLine),
                 'data-line-number': actualLine,
+                ...(ann ? { title: `${ann.label}: ${ann.detail}`, 'data-annotation': ann.label } : {}),
                 className: classNames,
               };
             }}
@@ -566,6 +584,7 @@ const StandardCodeViewer: React.FC<CodeViewerProps> = ({
   functionStartLine,
   functionEndLine,
   startingLineNumber = 1,
+  annotations,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const hasScrolledRef = useRef(false);
@@ -641,11 +660,16 @@ const StandardCodeViewer: React.FC<CodeViewerProps> = ({
           const isFunctionStart = lineNumber === functionStartLine;
           const isFunctionEnd = lineNumber === functionEndLine;
 
+          // DrTriton overlay: lineNumber is already absolute, so index annotations directly
+          const ann = annotations?.[lineNumber];
+
           // Build class names (excludes highlighted-line, controlled by external DOM manipulation)
           const classNames = [
             isInFunctionRange ? 'function-range' : '',
             isFunctionStart ? 'function-range-start' : '',
-            isFunctionEnd ? 'function-range-end' : ''
+            isFunctionEnd ? 'function-range-end' : '',
+            ann ? 'annotated-line' : '',
+            ann ? `annotated-${ann.severity}` : ''
           ].filter(Boolean).join(' ');
 
           return {
@@ -656,6 +680,7 @@ const StandardCodeViewer: React.FC<CodeViewerProps> = ({
             onClick: () => handleLineClick(lineNumber),
             'data-line-number': lineNumber,
             'data-viewer-id': viewerId,
+            ...(ann ? { title: `${ann.label}: ${ann.detail}`, 'data-annotation': ann.label } : {}),
             className: classNames,
           };
         }}

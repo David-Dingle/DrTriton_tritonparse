@@ -2,7 +2,7 @@
 
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
-import CodeViewer from "./CodeViewer";
+import CodeViewer, { LineAnnotation } from "./CodeViewer";
 import CopyCodeButton from "./CopyCodeButton";
 import {
     IRFile,
@@ -33,6 +33,8 @@ interface CodeComparisonViewProps {
     showPythonSource?: boolean;
     pythonMapping?: Record<string, SourceMapping>;
     irStages?: IRStageDescriptor[];
+    /** DrTriton computing-redundancy annotations for the Python source: absolute line -> finding */
+    pythonAnnotations?: Record<number, LineAnnotation>;
 }
 
 /**
@@ -82,6 +84,7 @@ const CodeComparisonView: React.FC<CodeComparisonViewProps> = ({
     showPythonSource = false,
     pythonMapping,
     irStages,
+    pythonAnnotations,
 }) => {
     // ==================== State Management ====================
 
@@ -617,6 +620,7 @@ const CodeComparisonView: React.FC<CodeComparisonViewProps> = ({
                                     onLineClick={handlePythonLineClick}
                                     viewerId="python"
                                     sourceMapping={pythonMapping}
+                                    annotations={pythonAnnotations}
                                     startingLineNumber={pythonInfo.start_line}
                                     functionStartLine={pythonInfo.function_start_line}
                                     functionEndLine={pythonInfo.function_end_line}

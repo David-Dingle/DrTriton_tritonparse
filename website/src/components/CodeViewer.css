@@ -93,3 +93,26 @@
     background: #4a4229;
     color: #ffd54f;
 }
+
+/* DrTriton computing-redundancy annotations (overlaid via CodeViewer `annotations` prop).
+   A tinted line + left rule by severity, plus a right-floated badge; the full finding text
+   is the native `title` tooltip on hover. */
+.annotated-line { border-left: 3px solid transparent; }
+.annotated-high { background: rgba(224, 85, 45, 0.13); border-left-color: #e0552d; }
+.annotated-med  { background: rgba(230, 160, 60, 0.13); border-left-color: #e6a03c; }
+.annotated-low  { background: rgba(120, 140, 170, 0.11); border-left-color: #7a90b0; }
+.annotated-line::after {
+  content: "\26A0 " attr(data-annotation);   /* ⚠ + label */
+  float: right;
+  margin-left: 1.2em;
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  opacity: 0.9;
+  padding: 0 0.4em;
+  border-radius: 3px;
+  cursor: help;
+}
+.annotated-high::after { color: #e0552d; }
+.annotated-med::after  { color: #b8791f; }
+.annotated-low::after  { color: #5a6b85; }

@@ -1,0 +1,466 @@
+{
+  "cyfngxb5h2su4ux5y4prpwdlrq5mwyjutwb2xk5rabvjhavzh4me.py": {
+    "29": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 13% efficient \u2014 sectors/inst 31.9 (ideal 4); 1372.5 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "33": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 13% efficient \u2014 sectors/inst 31.9 (ideal 4); 196.0 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    }
+  },
+  "coey5djwafgunztrc7hkhdogp2egi22nz2yjijtlhpa7k7rwd4ub.py": {
+    "44": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 12% efficient \u2014 sectors/inst 32.0 (ideal 4); 1047.8 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "57": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 12% efficient \u2014 sectors/inst 32.0 (ideal 4); 1047.8 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "58": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 12% efficient \u2014 sectors/inst 32.0 (ideal 4); 916.8 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "48": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 12% efficient \u2014 sectors/inst 32.0 (ideal 4); 916.8 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "69": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 12% efficient \u2014 sectors/inst 32.0 (ideal 4); 262.0 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    }
+  },
+  "cunjww2swstgh6jmgsugqpd73l3cr5kv7jiz7waafaoxriuflra7.py": {
+    "58": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 12% efficient \u2014 sectors/inst 32.0 (ideal 4); 522.8 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "48": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 12% efficient \u2014 sectors/inst 32.0 (ideal 4); 522.8 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "44": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 12% efficient \u2014 sectors/inst 32.0 (ideal 4); 522.8 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "57": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 12% efficient \u2014 sectors/inst 32.0 (ideal 4); 522.8 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    }
+  },
+  "cncpltaosvvvidkjqhtvco7ulgeooobjl6i76vtm6t7a4fnlghvg.py": {
+    "44": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 12% efficient \u2014 sectors/inst 32.0 (ideal 4); 260.3 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "57": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 12% efficient \u2014 sectors/inst 32.0 (ideal 4); 260.3 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "58": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 12% efficient \u2014 sectors/inst 32.0 (ideal 4); 227.8 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "48": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 12% efficient \u2014 sectors/inst 32.0 (ideal 4); 227.8 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "69": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 12% efficient \u2014 sectors/inst 32.0 (ideal 4); 65.1 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    }
+  },
+  "cofo4tawdt3arzqhfxdtwmsgze6fdthudrvylavsnhr5dcngatpb.py": {
+    "29": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 13% efficient \u2014 sectors/inst 31.8 (ideal 4); 259.2 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    }
+  },
+  "cer2ficwpqskx2h2piduaq7q23bjgdvc5mcf4orkg35ywzgbklbw.py": {
+    "44": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 13% efficient \u2014 sectors/inst 32.0 (ideal 4); 129.0 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "57": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 13% efficient \u2014 sectors/inst 32.0 (ideal 4); 112.8 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "58": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 13% efficient \u2014 sectors/inst 32.0 (ideal 4); 96.6 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "48": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 13% efficient \u2014 sectors/inst 32.0 (ideal 4); 96.6 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "69": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 13% efficient \u2014 sectors/inst 31.9 (ideal 4); 32.2 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "49": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 13% efficient \u2014 sectors/inst 32.0 (ideal 4); 16.1 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "56": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 13% efficient \u2014 sectors/inst 32.0 (ideal 4); 16.1 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "68": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 13% efficient \u2014 sectors/inst 32.0 (ideal 4); 16.1 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    }
+  },
+  "crhxsm4v7zhrbvwo3gyk2k35xapqcabpe2xapyixfubchyv756th.py": {
+    "29": {
+      "severity": "HIGH",
+      "label": "Memory coalescing",
+      "detail": "load 13% efficient \u2014 sectors/inst 31.5 (ideal 4); 128.0 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    }
+  },
+  "c5ed6vuanovv7gqpfc2ckju3hnyfcpcfgzz2oxracskwr6zioox6.py": {
+    "28": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 74.7 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "26": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 74.7 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "27": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 74.7 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "29": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 74.7 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "30": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 74.7 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    }
+  },
+  "c3rxxymw3354olkmkqielc2hmt7ypdyw57xk7gyhv5gsfuk5337l.py": {
+    "25": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 37.2 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "29": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 37.2 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "30": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 37.2 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "28": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 18.6 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "37": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 18.6 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "39": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 18.6 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    }
+  },
+  "cyzqpq7tcjdef2u7qi7macq473y6bvmip3w5rr7lbun7pay27csn.py": {
+    "33": {
+      "severity": "MED",
+      "label": "Memory coalescing",
+      "detail": "load 40% efficient \u2014 sectors/inst 5.1 (ideal 2); 28.6 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "32": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 49% efficient \u2014 sectors/inst 4.1 (ideal 2); 19.3 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "34": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 49% efficient \u2014 sectors/inst 4.1 (ideal 2); 19.3 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "31": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 49% efficient \u2014 sectors/inst 4.1 (ideal 2); 19.3 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    }
+  },
+  "c7zqywxnw2g2xnarpmspifvoi5aphsr3kqacics3tvo54zcqh2yl.py": {
+    "33": {
+      "severity": "MED",
+      "label": "Memory coalescing",
+      "detail": "load 39% efficient \u2014 sectors/inst 5.1 (ideal 2); 14.5 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "32": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 49% efficient \u2014 sectors/inst 4.1 (ideal 2); 9.9 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "34": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 49% efficient \u2014 sectors/inst 4.1 (ideal 2); 9.9 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "31": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 49% efficient \u2014 sectors/inst 4.1 (ideal 2); 9.9 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    }
+  },
+  "c534pu7mdjjtdkbxn4doter44xpssq53xegmwmhq5r4qoy5d5hjy.py": {
+    "33": {
+      "severity": "MED",
+      "label": "Memory coalescing",
+      "detail": "load 38% efficient \u2014 sectors/inst 5.2 (ideal 2); 7.5 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "32": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 47% efficient \u2014 sectors/inst 4.2 (ideal 2); 5.2 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "34": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 47% efficient \u2014 sectors/inst 4.2 (ideal 2); 5.2 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "31": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 47% efficient \u2014 sectors/inst 4.2 (ideal 2); 5.2 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    }
+  },
+  "ctpwjv5q3sho6rxsmsl2z3ycgxmuh3jungacxw4qhbzj5e7wlhjk.py": {
+    "26": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 4.6 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "30": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 4.6 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "25": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 2.3 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "36": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 2.3 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "39": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 2.3 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "29": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 2.3 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    }
+  },
+  "cotwugbqtri7xrh5hj7uu3p3eqsojlphuvzevhjywy4d45pimaxv.py": {
+    "25": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 4.6 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "29": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 4.6 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "30": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 4.6 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "28": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 2.3 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "37": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 2.3 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "39": {
+      "severity": "LOW",
+      "label": "Memory coalescing",
+      "detail": "load 50% efficient \u2014 sectors/inst 32.0 (ideal 16); 2.3 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    }
+  },
+  "cb4pcevgoepxxyilynnxd4k6ov3ky2fxj36rowcfgoalbn3wiijj.py": {
+    "29": {
+      "severity": "MED",
+      "label": "Memory coalescing",
+      "detail": "load 25% efficient \u2014 sectors/inst 8.0 (ideal 2); 4.4 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "26": {
+      "severity": "MED",
+      "label": "Memory coalescing",
+      "detail": "load 25% efficient \u2014 sectors/inst 8.0 (ideal 2); 3.5 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "24": {
+      "severity": "MED",
+      "label": "Memory coalescing",
+      "detail": "load 25% efficient \u2014 sectors/inst 8.0 (ideal 2); 2.6 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "21": {
+      "severity": "MED",
+      "label": "Memory coalescing",
+      "detail": "load 25% efficient \u2014 sectors/inst 8.0 (ideal 2); 920,832 B of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "52": {
+      "severity": "MED",
+      "label": "Memory coalescing",
+      "detail": "load 25% efficient \u2014 sectors/inst 8.0 (ideal 2); 920,832 B of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "35": {
+      "severity": "MED",
+      "label": "Memory coalescing",
+      "detail": "load 25% efficient \u2014 sectors/inst 8.0 (ideal 2); 920,448 B of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "39": {
+      "severity": "MED",
+      "label": "Memory coalescing",
+      "detail": "load 25% efficient \u2014 sectors/inst 8.0 (ideal 2); 920,448 B of DRAM wasted",
+      "type": "uncoalesced_load"
+    }
+  },
+  "cjzqpqywqmxf6o7kwcv5fkukdiq5xwci5kcgpz4ag56s3x5ok3vn.py": {
+    "33": {
+      "severity": "MED",
+      "label": "Memory coalescing",
+      "detail": "load 37% efficient \u2014 sectors/inst 5.4 (ideal 2); 4.0 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "32": {
+      "severity": "MED",
+      "label": "Memory coalescing",
+      "detail": "load 40% efficient \u2014 sectors/inst 5.0 (ideal 2); 3.4 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "31": {
+      "severity": "MED",
+      "label": "Memory coalescing",
+      "detail": "load 40% efficient \u2014 sectors/inst 5.0 (ideal 2); 3.4 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    },
+    "34": {
+      "severity": "MED",
+      "label": "Memory coalescing",
+      "detail": "load 41% efficient \u2014 sectors/inst 4.9 (ideal 2); 3.4 MB of DRAM wasted",
+      "type": "uncoalesced_load"
+    }
+  }
+}

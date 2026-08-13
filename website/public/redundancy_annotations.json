@@ -1,0 +1,1180 @@
+{
+  "c2blbcvwbh35wbo4vnr436aiqqnvjjozn74kdkorglpxhz76j3db.py": {
+    "47": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "152,320x redundant fp64 compute -> precompute a 128-entry table (19,496,960 execs -> 128 distinct results)",
+      "ratio": 152320.0,
+      "fp64": true
+    },
+    "119": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "147x redundant fp64 compute -> precompute a 4,145-entry table (609,280 execs -> 4,145 distinct results)",
+      "ratio": 147.0,
+      "fp64": true
+    },
+    "113": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "147x redundant fp64 compute -> precompute a 4,145-entry table (609,280 execs -> 4,145 distinct results)",
+      "ratio": 147.0,
+      "fp64": true
+    },
+    "100": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "38,080x redundant fp64 compute -> precompute a 16-entry table (609,280 execs -> 16 distinct results)",
+      "ratio": 38080.0,
+      "fp64": true
+    },
+    "72": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "38,080x redundant fp64 compute -> precompute a 16-entry table (609,280 execs -> 16 distinct results)",
+      "ratio": 38080.0,
+      "fp64": true
+    },
+    "71": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "609,280x redundant fp64 compute -> precompute a 1-entry table (609,280 execs -> 1 distinct results)",
+      "ratio": 609280.0,
+      "fp64": true
+    },
+    "111": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "609,280x redundant fp64 compute -> precompute a 1-entry table (609,280 execs -> 1 distinct results)",
+      "ratio": 609280.0,
+      "fp64": true
+    },
+    "115": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "147x redundant fp64 compute -> precompute a 4,145-entry table (609,280 execs -> 4,145 distinct results)",
+      "ratio": 147.0,
+      "fp64": true
+    },
+    "66": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "609,280x redundant fp64 compute -> precompute a 1-entry table (609,280 execs -> 1 distinct results)",
+      "ratio": 609280.0,
+      "fp64": true
+    },
+    "64": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "609,280x redundant fp64 compute -> precompute a 1-entry table (609,280 execs -> 1 distinct results)",
+      "ratio": 609280.0,
+      "fp64": true
+    },
+    "118": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "609,280x redundant fp64 compute -> precompute a 1-entry table (609,280 execs -> 1 distinct results)",
+      "ratio": 609280.0,
+      "fp64": true
+    },
+    "99": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "609,280x redundant fp64 compute -> precompute a 1-entry table (609,280 execs -> 1 distinct results)",
+      "ratio": 609280.0,
+      "fp64": true
+    },
+    "94": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "609,280x redundant fp64 compute -> precompute a 1-entry table (609,280 execs -> 1 distinct results)",
+      "ratio": 609280.0,
+      "fp64": true
+    },
+    "92": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "609,280x redundant fp64 compute -> precompute a 1-entry table (609,280 execs -> 1 distinct results)",
+      "ratio": 609280.0,
+      "fp64": true
+    },
+    "45": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "609,280x redundant fp64 compute -> precompute a 1-entry table (609,280 execs -> 1 distinct results)",
+      "ratio": 609280.0,
+      "fp64": true
+    },
+    "96": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "38,080x redundant fp64 compute -> precompute a 16-entry table (609,280 execs -> 16 distinct results)",
+      "ratio": 38080.0,
+      "fp64": true
+    },
+    "68": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "38,080x redundant fp64 compute -> precompute a 16-entry table (609,280 execs -> 16 distinct results)",
+      "ratio": 38080.0,
+      "fp64": true
+    },
+    "53": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "147x redundant fp64 compute -> precompute a 4,145-entry table (609,280 execs -> 4,145 distinct results)",
+      "ratio": 147.0,
+      "fp64": true
+    },
+    "49": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "38,080x redundant fp64 compute -> precompute a 16-entry table (609,280 execs -> 16 distinct results)",
+      "ratio": 38080.0,
+      "fp64": true
+    },
+    "52": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "157x redundant fp64 compute -> precompute a 3,893-entry table (609,280 execs -> 3,893 distinct results)",
+      "ratio": 156.5,
+      "fp64": true
+    }
+  },
+  "cdmbovpdeiabqafmm5vcqilbmzid42xqyxkgaz4l3h6b5zzo53ld.py": {
+    "133": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "800x redundant fp64 compute -> precompute a 128-entry table (102,400 execs -> 128 distinct results)",
+      "ratio": 800.0,
+      "fp64": true
+    },
+    "120": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "21x redundant fp64 compute -> precompute a 153-entry table (3,200 execs -> 153 distinct results)",
+      "ratio": 20.9,
+      "fp64": true
+    },
+    "116": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "22x redundant fp64 compute -> precompute a 145-entry table (3,200 execs -> 145 distinct results)",
+      "ratio": 22.1,
+      "fp64": true
+    },
+    "114": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "22x redundant fp64 compute -> precompute a 145-entry table (3,200 execs -> 145 distinct results)",
+      "ratio": 22.1,
+      "fp64": true
+    },
+    "119": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "46": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "48": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "67": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "65": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "73": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "72": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "101": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "112": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "95": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "93": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "100": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "50": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "54": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "23x redundant fp64 compute -> precompute a 137-entry table (3,200 execs -> 137 distinct results)",
+      "ratio": 23.4,
+      "fp64": true
+    },
+    "69": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "97": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "53": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "25x redundant fp64 compute -> precompute a 127-entry table (3,200 execs -> 127 distinct results)",
+      "ratio": 25.2,
+      "fp64": true
+    }
+  },
+  "cexxhy3uv5gai7es4wtdkr4odjum4nnwr4czc6w7qdwo23lla7iq.py": {
+    "133": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "800x redundant fp64 compute -> precompute a 128-entry table (102,400 execs -> 128 distinct results)",
+      "ratio": 800.0,
+      "fp64": true
+    },
+    "114": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "22x redundant fp64 compute -> precompute a 145-entry table (3,200 execs -> 145 distinct results)",
+      "ratio": 22.1,
+      "fp64": true
+    },
+    "101": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "120": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "21x redundant fp64 compute -> precompute a 153-entry table (3,200 execs -> 153 distinct results)",
+      "ratio": 20.9,
+      "fp64": true
+    },
+    "112": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "119": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "116": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "22x redundant fp64 compute -> precompute a 145-entry table (3,200 execs -> 145 distinct results)",
+      "ratio": 22.1,
+      "fp64": true
+    },
+    "67": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "65": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "100": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "73": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "72": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "95": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "93": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "48": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "46": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "54": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "23x redundant fp64 compute -> precompute a 137-entry table (3,200 execs -> 137 distinct results)",
+      "ratio": 23.4,
+      "fp64": true
+    },
+    "50": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "97": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "69": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "53": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "25x redundant fp64 compute -> precompute a 127-entry table (3,200 execs -> 127 distinct results)",
+      "ratio": 25.2,
+      "fp64": true
+    }
+  },
+  "cxqv7cqpdbpp4q2byt6uq52obnsadsufmqtrqpv5vxif6jnqzkor.py": {
+    "133": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "800x redundant fp64 compute -> precompute a 128-entry table (102,400 execs -> 128 distinct results)",
+      "ratio": 800.0,
+      "fp64": true
+    },
+    "48": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "72": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "73": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "67": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "65": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "46": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "120": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "21x redundant fp64 compute -> precompute a 153-entry table (3,200 execs -> 153 distinct results)",
+      "ratio": 20.9,
+      "fp64": true
+    },
+    "101": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "112": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "114": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "22x redundant fp64 compute -> precompute a 145-entry table (3,200 execs -> 145 distinct results)",
+      "ratio": 22.1,
+      "fp64": true
+    },
+    "100": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "93": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "95": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "116": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "22x redundant fp64 compute -> precompute a 145-entry table (3,200 execs -> 145 distinct results)",
+      "ratio": 22.1,
+      "fp64": true
+    },
+    "119": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "97": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "50": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "54": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "23x redundant fp64 compute -> precompute a 137-entry table (3,200 execs -> 137 distinct results)",
+      "ratio": 23.4,
+      "fp64": true
+    },
+    "69": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "53": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "25x redundant fp64 compute -> precompute a 127-entry table (3,200 execs -> 127 distinct results)",
+      "ratio": 25.2,
+      "fp64": true
+    }
+  },
+  "cgpuzjss64x32r2esa5v4ds6vutdvu2g7nn5ma63apc6r3idz2xz.py": {
+    "47": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "152,320x redundant fp64 compute -> precompute a 128-entry table (19,496,960 execs -> 128 distinct results)",
+      "ratio": 152320.0,
+      "fp64": true
+    },
+    "119": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "147x redundant fp64 compute -> precompute a 4,145-entry table (609,280 execs -> 4,145 distinct results)",
+      "ratio": 147.0,
+      "fp64": true
+    },
+    "72": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "38,080x redundant fp64 compute -> precompute a 16-entry table (609,280 execs -> 16 distinct results)",
+      "ratio": 38080.0,
+      "fp64": true
+    },
+    "66": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "609,280x redundant fp64 compute -> precompute a 1-entry table (609,280 execs -> 1 distinct results)",
+      "ratio": 609280.0,
+      "fp64": true
+    },
+    "45": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "609,280x redundant fp64 compute -> precompute a 1-entry table (609,280 execs -> 1 distinct results)",
+      "ratio": 609280.0,
+      "fp64": true
+    },
+    "64": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "609,280x redundant fp64 compute -> precompute a 1-entry table (609,280 execs -> 1 distinct results)",
+      "ratio": 609280.0,
+      "fp64": true
+    },
+    "71": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "609,280x redundant fp64 compute -> precompute a 1-entry table (609,280 execs -> 1 distinct results)",
+      "ratio": 609280.0,
+      "fp64": true
+    },
+    "113": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "147x redundant fp64 compute -> precompute a 4,145-entry table (609,280 execs -> 4,145 distinct results)",
+      "ratio": 147.0,
+      "fp64": true
+    },
+    "111": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "609,280x redundant fp64 compute -> precompute a 1-entry table (609,280 execs -> 1 distinct results)",
+      "ratio": 609280.0,
+      "fp64": true
+    },
+    "100": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "38,080x redundant fp64 compute -> precompute a 16-entry table (609,280 execs -> 16 distinct results)",
+      "ratio": 38080.0,
+      "fp64": true
+    },
+    "115": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "147x redundant fp64 compute -> precompute a 4,145-entry table (609,280 execs -> 4,145 distinct results)",
+      "ratio": 147.0,
+      "fp64": true
+    },
+    "118": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "609,280x redundant fp64 compute -> precompute a 1-entry table (609,280 execs -> 1 distinct results)",
+      "ratio": 609280.0,
+      "fp64": true
+    },
+    "99": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "609,280x redundant fp64 compute -> precompute a 1-entry table (609,280 execs -> 1 distinct results)",
+      "ratio": 609280.0,
+      "fp64": true
+    },
+    "94": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "609,280x redundant fp64 compute -> precompute a 1-entry table (609,280 execs -> 1 distinct results)",
+      "ratio": 609280.0,
+      "fp64": true
+    },
+    "92": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "609,280x redundant fp64 compute -> precompute a 1-entry table (609,280 execs -> 1 distinct results)",
+      "ratio": 609280.0,
+      "fp64": true
+    },
+    "96": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "38,080x redundant fp64 compute -> precompute a 16-entry table (609,280 execs -> 16 distinct results)",
+      "ratio": 38080.0,
+      "fp64": true
+    },
+    "68": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "38,080x redundant fp64 compute -> precompute a 16-entry table (609,280 execs -> 16 distinct results)",
+      "ratio": 38080.0,
+      "fp64": true
+    },
+    "53": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "147x redundant fp64 compute -> precompute a 4,145-entry table (609,280 execs -> 4,145 distinct results)",
+      "ratio": 147.0,
+      "fp64": true
+    },
+    "49": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "38,080x redundant fp64 compute -> precompute a 16-entry table (609,280 execs -> 16 distinct results)",
+      "ratio": 38080.0,
+      "fp64": true
+    },
+    "52": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "157x redundant fp64 compute -> precompute a 3,893-entry table (609,280 execs -> 3,893 distinct results)",
+      "ratio": 156.5,
+      "fp64": true
+    }
+  },
+  "cr4fwsicsgrx3bwc7d2mvuhp5urxunkhi6fa74bmqgp5mualueg6.py": {
+    "133": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "800x redundant fp64 compute -> precompute a 128-entry table (102,400 execs -> 128 distinct results)",
+      "ratio": 800.0,
+      "fp64": true
+    },
+    "120": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "21x redundant fp64 compute -> precompute a 153-entry table (3,200 execs -> 153 distinct results)",
+      "ratio": 20.9,
+      "fp64": true
+    },
+    "116": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "22x redundant fp64 compute -> precompute a 145-entry table (3,200 execs -> 145 distinct results)",
+      "ratio": 22.1,
+      "fp64": true
+    },
+    "114": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "22x redundant fp64 compute -> precompute a 145-entry table (3,200 execs -> 145 distinct results)",
+      "ratio": 22.1,
+      "fp64": true
+    },
+    "119": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "101": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "112": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "46": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "48": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "73": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "100": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "95": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "72": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "67": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "65": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "93": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "97": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "69": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "54": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "23x redundant fp64 compute -> precompute a 137-entry table (3,200 execs -> 137 distinct results)",
+      "ratio": 23.4,
+      "fp64": true
+    },
+    "50": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "53": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "25x redundant fp64 compute -> precompute a 127-entry table (3,200 execs -> 127 distinct results)",
+      "ratio": 25.2,
+      "fp64": true
+    }
+  },
+  "c7nwszixgt4axmflzp7difejo35fhz3mepjvidgn5wiujql22hya.py": {
+    "133": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "800x redundant fp64 compute -> precompute a 128-entry table (102,400 execs -> 128 distinct results)",
+      "ratio": 800.0,
+      "fp64": true
+    },
+    "120": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "21x redundant fp64 compute -> precompute a 153-entry table (3,200 execs -> 153 distinct results)",
+      "ratio": 20.9,
+      "fp64": true
+    },
+    "101": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "112": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "114": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "22x redundant fp64 compute -> precompute a 145-entry table (3,200 execs -> 145 distinct results)",
+      "ratio": 22.1,
+      "fp64": true
+    },
+    "116": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "22x redundant fp64 compute -> precompute a 145-entry table (3,200 execs -> 145 distinct results)",
+      "ratio": 22.1,
+      "fp64": true
+    },
+    "119": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "73": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "65": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "46": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "48": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "67": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "72": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "95": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "100": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "93": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "50": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "97": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "54": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "23x redundant fp64 compute -> precompute a 137-entry table (3,200 execs -> 137 distinct results)",
+      "ratio": 23.4,
+      "fp64": true
+    },
+    "69": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "53": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "25x redundant fp64 compute -> precompute a 127-entry table (3,200 execs -> 127 distinct results)",
+      "ratio": 25.2,
+      "fp64": true
+    }
+  },
+  "cmjfdfglboq2syfucbmo6av5wzbnl6jc5v36oru3ifzies73gg72.py": {
+    "133": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "800x redundant fp64 compute -> precompute a 128-entry table (102,400 execs -> 128 distinct results)",
+      "ratio": 800.0,
+      "fp64": true
+    },
+    "114": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "22x redundant fp64 compute -> precompute a 145-entry table (3,200 execs -> 145 distinct results)",
+      "ratio": 22.1,
+      "fp64": true
+    },
+    "101": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "112": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "120": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "21x redundant fp64 compute -> precompute a 153-entry table (3,200 execs -> 153 distinct results)",
+      "ratio": 20.9,
+      "fp64": true
+    },
+    "73": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "48": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "46": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "65": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "67": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "72": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "95": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "100": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "93": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "116": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "22x redundant fp64 compute -> precompute a 145-entry table (3,200 execs -> 145 distinct results)",
+      "ratio": 22.1,
+      "fp64": true
+    },
+    "119": {
+      "severity": "high",
+      "label": "Computing redundancy",
+      "detail": "3,200x redundant fp64 compute -> precompute a 1-entry table (3,200 execs -> 1 distinct results)",
+      "ratio": 3200.0,
+      "fp64": true
+    },
+    "54": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "23x redundant fp64 compute -> precompute a 137-entry table (3,200 execs -> 137 distinct results)",
+      "ratio": 23.4,
+      "fp64": true
+    },
+    "97": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "50": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "69": {
+      "severity": "med",
+      "label": "Computing redundancy",
+      "detail": "400x redundant fp64 compute -> precompute a 8-entry table (3,200 execs -> 8 distinct results)",
+      "ratio": 400.0,
+      "fp64": true
+    },
+    "53": {
+      "severity": "low",
+      "label": "Computing redundancy",
+      "detail": "25x redundant fp64 compute -> precompute a 127-entry table (3,200 execs -> 127 distinct results)",
+      "ratio": 25.2,
+      "fp64": true
+    }
+  }
+}

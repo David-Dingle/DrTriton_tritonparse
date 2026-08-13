@@ -7,9 +7,31 @@ NVDISASM_FNAME_RE = re.compile(r"^\s*\.global\s+(\w+)")
 
 
 def path_to_nvdisasm():
-    from triton import knobs
+    # Triton >= 3.4 exposes the bundled nvdisasm path via knobs.
+    try:
+        from triton import knobs
 
-    return knobs.nvidia.nvdisasm.path
+        return knobs.nvidia.nvdisasm.path
+    except Exception:
+        # Triton <= 3.3 has no knobs: locate nvdisasm via env / PATH / CUDA install.
+        import os
+        import shutil
+
+        cand = os.environ.get("TRITON_NVDISASM_PATH") or shutil.which("nvdisasm")
+        if cand and os.path.exists(cand):
+            return cand
+        for base in (
+            os.environ.get("CUDA_HOME"),
+            os.environ.get("CUDA_PATH"),
+            "/usr/local/cuda",
+        ):
+            if base:
+                cand = os.path.join(base, "bin", "nvdisasm")
+                if os.path.exists(cand):
+                    return cand
+        raise RuntimeError(
+            "nvdisasm not found (no triton.knobs; not on PATH, TRITON_NVDISASM_PATH, or CUDA_HOME)"
+        )
 
 
 def is_nvdisasm_available():
@@ -18,7 +40,7 @@ def is_nvdisasm_available():
             return True
         else:
             return False
-    except RuntimeError:
+    except (RuntimeError, ImportError):
         return False
 
 

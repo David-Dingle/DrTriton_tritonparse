@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { ProcessedKernel, getIRType, getDefaultPanels, IRStageDescriptor } from "../utils/dataLoader";
 import CodeComparisonView from "../components/CodeComparisonView";
+import type { LineAnnotation } from "../components/CodeViewer";
 import { getDisplayLanguage } from "../utils/irLanguage";
 import { mapLanguageToHighlighter } from "../utils/languageUtils";
 import { ArrowsRightLeftIcon } from "../components/icons";
@@ -50,6 +51,45 @@ const CodeViewInner: React.FC<{
   const [showPythonSource, setShowPythonSource] = useState<boolean>(true);
 
   const hasPythonSource = !!kernel?.pythonSourceInfo?.code;
+
+  // DrTriton redundancy overlay: load BOTH annotation files once and merge them,
+  // keyed by file basename. redundancy_annotations.json is emitted by
+  // computing_redundancy_to_tritonparse.py; access_annotations.json by
+  // access_redundancy_to_tritonparse.py. Either may be absent (feature off).
+  const [redundancyAnn, setRedundancyAnn] = useState<
+    Record<string, Record<string, LineAnnotation>>
+  >({});
+  useEffect(() => {
+    const base = import.meta.env.BASE_URL;
+    const grab = (name: string) =>
+      fetch(`${base}${name}`)
+        .then((r) => (r.ok ? r.json() : {}))
+        .catch(() => ({}));
+    Promise.all([
+      grab("redundancy_annotations.json"),
+      grab("access_annotations.json"),
+    ]).then(([comp, acc]) => {
+      const merged: Record<string, Record<string, LineAnnotation>> = {};
+      for (const src of [comp, acc]) {
+        for (const file of Object.keys(src || {})) {
+          merged[file] = { ...(merged[file] || {}), ...src[file] };
+        }
+      }
+      setRedundancyAnn(merged);
+    });
+  }, []);
+
+  // annotations for THIS kernel's Python file (match by basename), keyed by absolute line
+  const pyAnnotations = useMemo<Record<number, LineAnnotation>>(() => {
+    const fp = kernel?.pythonSourceInfo?.file_path;
+    if (!fp) return {};
+    const base = fp.split("/").pop() as string;
+    const byLine = redundancyAnn[base];
+    if (!byLine) return {};
+    const out: Record<number, LineAnnotation> = {};
+    for (const k of Object.keys(byLine)) out[Number(k)] = byLine[k];
+    return out;
+  }, [kernel, redundancyAnn]);
 
   return (
     <div className="p-6">
@@ -182,6 +222,7 @@ const CodeViewInner: React.FC<{
             showPythonSource={showPythonSource && hasPythonSource}
             pythonMapping={kernel.sourceMappings?.["python"] || {}}
             irStages={kernel.ir_stages}
+            pythonAnnotations={pyAnnotations}
           />
         </div>
       ) : (

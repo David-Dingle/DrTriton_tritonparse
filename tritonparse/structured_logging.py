@@ -1835,12 +1835,12 @@ def enable_launch_tracing() -> None:
     if _trace_launch_enabled:
         return
 
-    from triton import knobs
+    from . import _knobs_compat as _kc
 
     launch_hook = LaunchHookImpl()
     jit_hook = JITHookImpl()
-    knobs.runtime.jit_post_compile_hook = jit_hook
-    knobs.runtime.launch_enter_hook = launch_hook
+    _kc.set_jit_post_compile_hook(jit_hook)
+    _kc.set_launch_enter_hook(launch_hook)
 
     _trace_launch_enabled = True
 
@@ -1874,10 +1874,10 @@ def disable_launch_tracing() -> None:
     if not _trace_launch_enabled:
         return
 
-    from triton import knobs
+    from . import _knobs_compat as _kc
 
-    knobs.runtime.jit_post_compile_hook = None
-    knobs.runtime.launch_enter_hook = None
+    _kc.set_jit_post_compile_hook(None)
+    _kc.set_launch_enter_hook(None)
 
     _trace_launch_enabled = False
     log.debug("[tritonparse] Launch tracing disabled")
@@ -1995,11 +1995,10 @@ def init(
         TRITONPARSE_TENSOR_SAVE_MAX_RUNS = tensor_save_max_runs
 
     init_basic(trace_folder)
-    from triton import knobs
+    from . import _knobs_compat as _kc
 
-    knobs.compilation.listener = maybe_trace_triton
-    if hasattr(knobs.autotuning, "listener"):
-        knobs.autotuning.listener = _autotune_listener
+    _kc.set_compilation_listener(maybe_trace_triton)
+    _kc.set_autotune_listener(_autotune_listener)
 
 
 def init_with_env():
@@ -2043,15 +2042,13 @@ def clear_logging_config():
     _kernel_run_counts_per_hash = {}
     _save_blobs_for_current_launch = True
 
-    # 4. Reset Triton knobs
-    # Check if triton was actually imported and used
-    from triton import knobs
+    # 4. Reset Triton hook points (knobs on Triton>=3.4, legacy shim on <=3.3)
+    from . import _knobs_compat as _kc
 
-    knobs.compilation.listener = None
-    if hasattr(knobs.autotuning, "listener"):
-        knobs.autotuning.listener = None
-    knobs.runtime.jit_post_compile_hook = None
-    knobs.runtime.launch_enter_hook = None
+    _kc.set_compilation_listener(None)
+    _kc.set_autotune_listener(None)
+    _kc.set_jit_post_compile_hook(None)
+    _kc.set_launch_enter_hook(None)
 
     # 5. Unpatch torch.profiler.schedule if patched
     unpatch_profiler_schedule()

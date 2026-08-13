@@ -1,0 +1,288 @@
+{
+  "ccd2xay465mvfkmgkirbdh6u3dexndcmuqpyxtnluzt6rk5iamfp.py": {
+    "102": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal write redundancy \u2014 100.0% overwritten before any read",
+      "type": "temporal_write_redundancy"
+    },
+    "108": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal write redundancy \u2014 100.0% overwritten before any read",
+      "type": "temporal_write_redundancy"
+    },
+    "126": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal write redundancy \u2014 100.0% overwritten before any read",
+      "type": "temporal_write_redundancy"
+    }
+  },
+  "ctbbccfsdzspbphrd3wim6awhyziidywsxe6ky3sozjrpcejngby.py": {
+    "40": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal write redundancy \u2014 100.0% overwritten before any read",
+      "type": "temporal_write_redundancy"
+    },
+    "65": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal read redundancy \u2014 100.0% re-read with no write between",
+      "type": "temporal_read_redundancy"
+    },
+    "66": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal read redundancy \u2014 100.0% re-read with no write between",
+      "type": "temporal_read_redundancy"
+    },
+    "67": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal read redundancy \u2014 100.0% re-read with no write between",
+      "type": "temporal_read_redundancy"
+    }
+  },
+  "triton_helpers.py": {
+    "238": {
+      "severity": "low",
+      "label": "Temporal access redundancy",
+      "detail": "temporal read redundancy \u2014 0.4% re-read with no write between",
+      "type": "temporal_read_redundancy"
+    }
+  },
+  "cifzqjdsqlqbzzuh5hz22rrjfa7gy4rglfrjx6rqnzghnptjlf5j.py": {
+    "96": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal read redundancy \u2014 100.0% re-read with no write between",
+      "type": "temporal_read_redundancy"
+    },
+    "98": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal write redundancy \u2014 100.0% overwritten before any read",
+      "type": "temporal_write_redundancy"
+    }
+  },
+  "cguoht6rqqej6hqwt5u3kxciitnnd5jcd7pkek5nmis4ha4h75hn.py": {
+    "96": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal write redundancy \u2014 100.0% overwritten before any read",
+      "type": "temporal_write_redundancy"
+    }
+  },
+  "croqare3pm2mwiaq7k3a7igoaups34beifmv2svu2djraqvzsmhz.py": {
+    "96": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal write redundancy \u2014 100.0% overwritten before any read",
+      "type": "temporal_write_redundancy"
+    }
+  },
+  "c3naynw6qqpwtr5rxrxhdcnupka47yar45yvmdwlvfrct2tvphtd.py": {
+    "64": {
+      "severity": "HIGH",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 100.0% same value across 8,192 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    },
+    "65": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal read redundancy \u2014 100.0% re-read with no write between",
+      "type": "temporal_read_redundancy"
+    },
+    "66": {
+      "severity": "HIGH",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 100.0% same value across 8,192 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    },
+    "38": {
+      "severity": "HIGH",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 100.0% same value across 8,192 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    },
+    "40": {
+      "severity": "HIGH",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 100.0% same value across 8,192 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    }
+  },
+  "csuwkagbwpupjeftektqc4p27dji7e6lcrli5npykqwjxcel3zm5.py": {
+    "96": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal read redundancy \u2014 100.0% re-read with no write between",
+      "type": "temporal_read_redundancy"
+    },
+    "108": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal read redundancy \u2014 100.0% re-read with no write between",
+      "type": "temporal_read_redundancy"
+    },
+    "113": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal write redundancy \u2014 100.0% overwritten before any read",
+      "type": "temporal_write_redundancy"
+    }
+  },
+  "czbvtlyrzsdi2pxxxfqcqz6heanlzts7r5yvkhnaoczrofdsnv7h.py": {
+    "96": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal write redundancy \u2014 100.0% overwritten before any read",
+      "type": "temporal_write_redundancy"
+    }
+  },
+  "cv3jdwooqqqmger42tcnffkdxm236ax373iyarf2gtmk4rme5g3e.py": {
+    "100": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal read redundancy \u2014 100.0% re-read with no write between",
+      "type": "temporal_read_redundancy"
+    },
+    "98": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal read redundancy \u2014 100.0% re-read with no write between",
+      "type": "temporal_read_redundancy"
+    },
+    "99": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal read redundancy \u2014 100.0% re-read with no write between",
+      "type": "temporal_read_redundancy"
+    },
+    "97": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal read redundancy \u2014 100.0% re-read with no write between",
+      "type": "temporal_read_redundancy"
+    },
+    "101": {
+      "severity": "HIGH",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 100.0% same value across 4,608 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    },
+    "103": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal read redundancy \u2014 100.0% re-read with no write between",
+      "type": "temporal_read_redundancy"
+    },
+    "109": {
+      "severity": "high",
+      "label": "Temporal access redundancy",
+      "detail": "temporal write redundancy \u2014 100.0% overwritten before any read",
+      "type": "temporal_write_redundancy"
+    }
+  },
+  "ctv2at5awnf7jumclluyotvm4fifg5gcqce6tki36vxknadycroc.py": {
+    "34": {
+      "severity": "HIGH",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 100.0% same value across 8,192 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    }
+  },
+  "cwv5gwvy6wq5kdjgcimdxadw27q5axknx5a3o6inr2fjefjzq6fi.py": {
+    "44": {
+      "severity": "HIGH",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 100.0% same value across 8,192 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    },
+    "42": {
+      "severity": "HIGH",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 100.0% same value across 8,192 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    },
+    "46": {
+      "severity": "HIGH",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 100.0% same value across 8,192 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    },
+    "75": {
+      "severity": "HIGH",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 100.0% same value across 8,192 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    }
+  },
+  "cam2wypakkmu4ryv7zcftjnr4jeyw2znmc5tlbsblzsb4eilolgp.py": {
+    "42": {
+      "severity": "HIGH",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 100.0% same value across 8,192 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    },
+    "44": {
+      "severity": "HIGH",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 100.0% same value across 8,192 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    },
+    "46": {
+      "severity": "HIGH",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 100.0% same value across 8,192 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    },
+    "75": {
+      "severity": "HIGH",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 100.0% same value across 8,192 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    }
+  },
+  "cv7oxj3v5hx7a2ptvjg375hf33ppcswxt3pikki4g2hk6pzkvhay.py": {
+    "35": {
+      "severity": "HIGH",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 99.9% same value across 1,024 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    }
+  },
+  "c6uou2yz6mgdpyu5yr4gtndx2epzzczcqzu5tfhwnwhqyykwx4q2.py": {
+    "29": {
+      "severity": "HIGH",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 99.3% same value across 150 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    }
+  },
+  "cegbmhcse6akmagf5songpd332mrecym43ahegise2kpqa7ssrdw.py": {
+    "29": {
+      "severity": "HIGH",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 99.3% same value across 150 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    }
+  },
+  "ca4byl7y27xgjkxnmu2tfjobu2segz5dr53zml3tc7a2cw7j5att.py": {
+    "35": {
+      "severity": "MED",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 98.4% same value across 64 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    },
+    "31": {
+      "severity": "MED",
+      "label": "Spatial access redundancy",
+      "detail": "spatial redundancy \u2014 98.4% same value across 64 distinct addresses (1 distinct values)",
+      "type": "spatial_redundancy"
+    }
+  }
+}
