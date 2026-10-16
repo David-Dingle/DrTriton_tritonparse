@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DiffComparisonView from "../components/DiffComparisonView";
+import ShareButton from "../components/ShareButton";
 import { useFileDiffSession } from "../context/FileDiffSession";
 import { ProcessedKernel, loadLogData, loadLogDataFromFile, processKernelData, getIRType } from "../utils/dataLoader";
 import { normalizeDataUrl } from "../utils/urlUtils";
@@ -17,10 +18,16 @@ const PARAM_VIEW = "view";
 const PARAM_JSON_B_URL = "json_b_url";
 const PARAM_KERNEL_HASH_A = "kernel_hash_a";
 const PARAM_KERNEL_HASH_B = "kernel_hash_b";
+const PARAM_LABEL_A = "label_a";
+const PARAM_LABEL_B = "label_b";
 const PARAM_MODE = "mode";
 const PARAM_IR = "ir";
-const PARAM_IGNORE_WS = "ignore_ws";
-const PARAM_WORD_LEVEL = "word_level";
+// NOTE: legacy shared links may still carry ignore_ws=0; it is intentionally
+// no longer read. Leading/trailing whitespace is always ignored now (matching
+// the Monaco default), so the toggle was removed.
+// NOTE: legacy shared links may still carry word_level=1; it is intentionally
+// no longer read. Monaco has no word-vs-line diff mode (intra-line
+// highlighting is always on), so the option was dead.
 const PARAM_CONTEXT = "context";
 const PARAM_WRAP = "wrap";
 const PARAM_ONLY_CHANGED = "only_changed";
@@ -95,13 +102,15 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
     initialParams.get(PARAM_IR) || ""
   );
 
+  // Custom diff labels (lazy init from URL params)
+  const [leftLabel, setLeftLabel] = useState<string>(() =>
+    initialParams.get(PARAM_LABEL_A) || ""
+  );
+  const [rightLabel, setRightLabel] = useState<string>(() =>
+    initialParams.get(PARAM_LABEL_B) || ""
+  );
+
   // Diff options (lazy init from URL params)
-  const [ignoreWs, setIgnoreWs] = useState<boolean>(() =>
-    initialParams.get(PARAM_IGNORE_WS) !== "0"
-  );
-  const [wordLevel, setWordLevel] = useState<boolean>(() =>
-    initialParams.get(PARAM_WORD_LEVEL) === "1"
-  );
   const [contextLines, setContextLines] = useState<number>(() => {
     const ctx = parseInt(initialParams.get(PARAM_CONTEXT) || "");
     return !Number.isNaN(ctx) ? ctx : 3;
@@ -232,25 +241,25 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
   }, [kernelsLeft, kernelsRight, leftIdx, rightIdx, leftLoadedFromLocal, leftKernelsFromLocal, leftLoadedUrlLocal, leftKernelsFromUrl]);
 
   // Resolve left/right kernels early for default panel computation
-  const leftArrayResolved = (sess.left?.kernels?.length || 0) > 0
-    ? sess.left.kernels
-    : (leftLoadedFromLocal
-      ? leftKernelsFromLocal
-      : (leftLoadedUrlLocal ? leftKernelsFromUrl : kernelsLeft));
+  const leftArrayResolved =
+    (sess.left?.kernels?.length || 0) > 0
+      ? sess.left.kernels
+      : (leftLoadedFromLocal
+        ? leftKernelsFromLocal
+        : (leftLoadedUrlLocal ? leftKernelsFromUrl : kernelsLeft));
   const leftKernel = leftArrayResolved[leftIdx];
   const rightKernel = kernelsRight[rightIdx];
 
   const effectiveIrType = irType || unionIrTypes[0];
 
-  // Update URL on state changes (File Diff owns its params)
-  const syncUrl = useCallback(() => {
+  // Build the shareable File Diff URL from current state (also used by syncUrl,
+  // so the copied link is never stale regardless of the debounced history sync)
+  const buildShareUrl = useCallback(() => {
     const params = new URLSearchParams(window.location.search);
     params.set(PARAM_VIEW, "file_diff");
-    // left always present
-    const leftArray = leftLoadedFromLocal
-      ? leftKernelsFromLocal
-      : (leftLoadedUrlLocal ? leftKernelsFromUrl : kernelsLeft);
-    if (leftArray[leftIdx]?.metadata?.hash) params.set(PARAM_KERNEL_HASH_A, String(leftArray[leftIdx].metadata!.hash));
+    // left always present; use the resolved array so kernel_hash_a matches the
+    // kernel actually being viewed (which prefers sess.left.kernels)
+    if (leftArrayResolved[leftIdx]?.metadata?.hash) params.set(PARAM_KERNEL_HASH_A, String(leftArrayResolved[leftIdx].metadata!.hash));
     else params.delete(PARAM_KERNEL_HASH_A);
     // right url/hash
     if (rightLoadedUrl) params.set(PARAM_JSON_B_URL, rightLoadedUrl);
@@ -266,15 +275,40 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
     if (mode === "single" && effectiveIrType) params.set(PARAM_IR, effectiveIrType);
     else params.delete(PARAM_IR);
     // options
-    params.set(PARAM_IGNORE_WS, ignoreWs ? "1" : "0");
-    params.set(PARAM_WORD_LEVEL, wordLevel ? "1" : "0");
     params.set(PARAM_CONTEXT, String(contextLines));
     params.set(PARAM_WRAP, wordWrap);
     params.set(PARAM_ONLY_CHANGED, onlyChanged ? "1" : "0");
+    if (leftLabel) params.set(PARAM_LABEL_A, leftLabel);
+    else params.delete(PARAM_LABEL_A);
+    if (rightLabel) params.set(PARAM_LABEL_B, rightLabel);
+    else params.delete(PARAM_LABEL_B);
     const newUrl = new URL(window.location.href);
     newUrl.search = params.toString();
-    window.history.replaceState({}, "", newUrl.toString());
-  }, [kernelsLeft, kernelsRight, leftIdx, rightIdx, rightLoadedUrl, mode, effectiveIrType, ignoreWs, wordLevel, contextLines, wordWrap, onlyChanged, leftLoadedFromLocal, leftLoadedUrlLocal, leftLoadedUrl, leftKernelsFromLocal, leftKernelsFromUrl]);
+    return newUrl.toString();
+  }, [leftArrayResolved, kernelsRight, leftIdx, rightIdx, rightLoadedUrl, mode, effectiveIrType, contextLines, wordWrap, onlyChanged, leftLoadedFromLocal, leftLoadedUrlLocal, leftLoadedUrl, leftLabel, rightLabel]);
+
+  // Update URL on state changes (File Diff owns its params)
+  const syncUrl = useCallback(() => {
+    window.history.replaceState({}, "", buildShareUrl());
+  }, [buildShareUrl]);
+
+  // Sharing requires both traces loaded from URLs: local files leave no
+  // restorable json_url/json_b_url in the link. Also require that neither side
+  // is still loading or errored, so we never copy a link that won't resolve.
+  const hasLeftShareUrl = !leftLoadedFromLocal && !loadingLeft && !errorLeft && !!(leftLoadedUrlLocal ?? leftLoadedUrl);
+  const hasRightShareUrl = !rightLoadedFromLocal && !loadingRight && !errorRight && !!rightLoadedUrl;
+  const canShareDiff = hasLeftShareUrl && hasRightShareUrl;
+
+  // Keep the latest sync callback so unmount can flush pending state: if the
+  // user types a label and navigates away (tab switch / reload) within the
+  // 200ms debounce window, the plain cleanup would cancel the pending update
+  // and the final label would never reach the URL. Calling the latest sync
+  // here persists it.
+  const syncUrlRef = useRef(syncUrl);
+  useEffect(() => {
+    syncUrlRef.current = syncUrl;
+  }, [syncUrl]);
+  useEffect(() => () => syncUrlRef.current(), []);
 
   // Debounce URL updates to reduce history churn
   useEffect(() => {
@@ -284,14 +318,15 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
     return () => clearTimeout(id);
   }, [syncUrl]);
 
-  // When navigating away, temporarily hide diff editors to avoid Monaco dispose race
-  const [hideDiff, setHideDiff] = useState<boolean>(false);
-  const resetKey = `${mode}-${effectiveIrType}-${leftIdx}-${rightIdx}`;
-  const [prevResetKey, setPrevResetKey] = useState(resetKey);
-  if (resetKey !== prevResetKey) {
-    setPrevResetKey(resetKey);
-    setHideDiff(false);
-  }
+  // NOTE: an earlier revision hid the diff editors on preview navigation
+  // ("hideDiff") to dodge the Monaco dispose race. That race is fixed at its
+  // root (detach-then-dispose in DiffComparisonView), so the extra unmount
+  // was pure cost — and the flag was never restored when the reset key was
+  // unchanged, leaving a blank diff after a preview round-trip. Plain tab
+  // switches keep this view mounted (App keep-alive hides with display:none),
+  // but the preview buttons below navigate into App's EXCLUSIVE preview
+  // rendering, which genuinely unmounts this view and remounts a fresh one
+  // on return (covered by the preview round-trip e2e step).
 
   const renderSingle = () => {
     const leftContent = getContentByIRType(leftKernel, effectiveIrType);
@@ -307,22 +342,20 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
             {missingRight && <span>Right: Not available</span>}
           </div>
         </div>
-        {!hideDiff && (
-          <DiffComparisonView
-            key={`single-${leftIdx}-${rightIdx}-${effectiveIrType}`}
-            leftContent={leftContent}
-            rightContent={rightContent}
-            height="calc(100vh - 14rem)"
-            language={effectiveIrType === "python" ? "python" : "plaintext"}
-            options={{
-              ignoreWhitespace: ignoreWs,
-              wordLevel,
-              context: contextLines,
-              wordWrap,
-              onlyChanged,
-            }}
-          />
-        )}
+        <DiffComparisonView
+          key={`single-${leftIdx}-${rightIdx}-${effectiveIrType}`}
+          leftContent={leftContent}
+          rightContent={rightContent}
+          leftLabel={leftLabel}
+          rightLabel={rightLabel}
+          height="calc(100vh - 14rem)"
+          language={effectiveIrType === "python" ? "python" : "plaintext"}
+          options={{
+            context: contextLines,
+            wordWrap,
+            onlyChanged,
+          }}
+        />
       </div>
     );
   };
@@ -353,22 +386,20 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
               </button>
               {isOpen && (
                 <div className="px-2 pb-2">
-                  {!hideDiff && (
-                    <DiffComparisonView
-                      key={`all-${t}-${leftIdx}-${rightIdx}`}
-                      leftContent={leftContent}
-                      rightContent={rightContent}
-                      height="calc(100vh - 14rem)"
-                      language={t === "python" ? "python" : "plaintext"}
-                      options={{
-                        ignoreWhitespace: ignoreWs,
-                        wordLevel,
-                        context: contextLines,
-                        wordWrap,
-                        onlyChanged,
-                      }}
-                    />
-                  )}
+                  <DiffComparisonView
+                    key={`all-${t}-${leftIdx}-${rightIdx}`}
+                    leftContent={leftContent}
+                    rightContent={rightContent}
+                    leftLabel={leftLabel}
+                    rightLabel={rightLabel}
+                    height="calc(100vh - 14rem)"
+                    language={t === "python" ? "python" : "plaintext"}
+                    options={{
+                      context: contextLines,
+                      wordWrap,
+                      onlyChanged,
+                    }}
+                  />
                 </div>
               )}
             </div>
@@ -450,7 +481,14 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
 
   return (
     <div className="p-4">
-      <h1 className="text-xl font-semibold text-gray-800 mb-2">File Diff</h1>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-xl font-semibold text-gray-800">File Diff</h1>
+        <ShareButton
+          getShareUrl={buildShareUrl}
+          disabled={!canShareDiff}
+          disabledTitle="Load both traces from URLs to share (local files can't be shared via link)"
+        />
+      </div>
 
       <div className="bg-white rounded-lg p-3 mb-3 border border-gray-200">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -496,14 +534,14 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
               <button
                 className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded border"
                 disabled={leftArrayResolved.length === 0}
-                onClick={() => { setHideDiff(true); setTimeout(() => sess.gotoOverview('left'), 0); }}
+                onClick={() => { setTimeout(() => sess.gotoOverview('left'), 0); }}
               >
                 Left → Kernel Overview
               </button>
               <button
                 className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded border"
                 disabled={leftArrayResolved.length === 0}
-                onClick={() => { setHideDiff(true); setTimeout(() => sess.gotoIRCode('left'), 0); }}
+                onClick={() => { setTimeout(() => sess.gotoIRCode('left'), 0); }}
               >
                 Left → IR Code
               </button>
@@ -550,14 +588,14 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
               <button
                 className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded border"
                 disabled={kernelsRight.length === 0}
-                onClick={() => { setHideDiff(true); setTimeout(() => sess.gotoOverview('right'), 0); }}
+                onClick={() => { setTimeout(() => sess.gotoOverview('right'), 0); }}
               >
                 Right → Kernel Overview
               </button>
               <button
                 className="px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded border"
                 disabled={kernelsRight.length === 0}
-                onClick={() => { setHideDiff(true); setTimeout(() => sess.gotoIRCode('right'), 0); }}
+                onClick={() => { setTimeout(() => sess.gotoIRCode('right'), 0); }}
               >
                 Right → IR Code
               </button>
@@ -625,20 +663,12 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
             <label className="block text-sm font-medium text-gray-700 mb-1">Diff Options</label>
             <div className="flex flex-wrap gap-2">
               <label className="inline-flex items-center gap-1 text-sm">
-                <input type="checkbox" checked={ignoreWs} onChange={(e) => setIgnoreWs(e.target.checked)} />
-                Ignore whitespace
-              </label>
-              <label className="inline-flex items-center gap-1 text-sm">
                 <input type="checkbox" checked={onlyChanged} onChange={(e) => setOnlyChanged(e.target.checked)} />
                 Only changes
               </label>
-              <label className="inline-flex items-center gap-1 text-sm">
-                <input type="checkbox" checked={wordLevel} onChange={(e) => setWordLevel(e.target.checked)} />
-                Word-level
-              </label>
-              <label className="inline-flex items-center gap-1 text-sm">
+              <label className={`inline-flex items-center gap-1 text-sm ${onlyChanged ? "" : "opacity-50"}`} title={onlyChanged ? "Unchanged lines shown around each change" : "Enable Only changes to set context lines"}>
                 <span>Context</span>
-                <input type="number" className="w-16 border border-gray-300 rounded px-2 py-1" value={contextLines} onChange={(e) => setContextLines(parseInt(e.target.value) || 0)} />
+                <input type="number" className="w-16 border border-gray-300 rounded px-2 py-1 disabled:bg-gray-100" value={contextLines} disabled={!onlyChanged} onChange={(e) => setContextLines(parseInt(e.target.value) || 0)} />
               </label>
               <label className="inline-flex items-center gap-1 text-sm">
                 <span>Wrap</span>
@@ -646,6 +676,28 @@ const FileDiffView: React.FC<FileDiffViewProps> = ({ kernelsLeft, selectedLeftIn
                   <option value="off">off</option>
                   <option value="on">on</option>
                 </select>
+              </label>
+              <label className="inline-flex items-center gap-1 text-sm">
+                <span>A label</span>
+                <input
+                  type="text"
+                  placeholder="Left…"
+                  aria-label="Left diff label"
+                  className="border border-gray-300 rounded px-2 py-1 w-32"
+                  value={leftLabel}
+                  onChange={(e) => setLeftLabel(e.target.value)}
+                />
+              </label>
+              <label className="inline-flex items-center gap-1 text-sm">
+                <span>B label</span>
+                <input
+                  type="text"
+                  placeholder="Right…"
+                  aria-label="Right diff label"
+                  className="border border-gray-300 rounded px-2 py-1 w-32"
+                  value={rightLabel}
+                  onChange={(e) => setRightLabel(e.target.value)}
+                />
               </label>
             </div>
           </div>

@@ -670,5 +670,309 @@ class TestDeviceStringHelpers(unittest.TestCase):
         self.assertEqual(normalize_accelerator_device_string(""), "cpu")
 
 
+class TestAmdBufferOpsStatus(unittest.TestCase):
+    """Derived AMD buffer-ops enablement status in ir_analysis."""
+
+    _TTGIR = """\
+tt.func @kernel(%arg0: !tt.ptr<f32>) {
+  %0 = tt.load %arg0 : !tt.ptr<f32>
+  %1 = amdg.buffer_load %arg0 : !tt.ptr<f32>
+  %2 = amdg.buffer_load_to_local %arg0 : !tt.ptr<f32>
+  %3 = tt.atomic_rmw add, %arg0, %0 : !tt.ptr<f32>
+  %4 = amdg.buffer_atomic_rmw add, %arg0, %0 : !tt.ptr<f32>
+  tt.store %arg0, %1 : !tt.ptr<f32>
+}"""
+
+    _GCN_ALL_BUFFER = """\
+buffer_load_dwordx4 v[1:4], off, s[4:7], 0
+buffer_store_dwordx2 v[1:2], v3, s[4:5]
+"""
+
+    _GCN_PARTIAL = """\
+buffer_load_dwordx4 v[1:4], off, s[4:7], 0
+global_store_dwordx2 v[1:2], v3, s[4:5]
+"""
+
+    _GCN_NONE = """\
+global_load_dwordx4 v[1:4], off, s[4:7], 0
+global_store_dwordx2 v[1:2], v3, s[4:5]
+"""
+
+    _GCN_NO_MEMOPS = """\
+s_waitcnt vmcnt(0)
+v_add_u32 v1, v2, v3
+"""
+
+    _GCN_ALL_BUFFER_ATOMICS = """\
+buffer_atomic_add v1, off, s[4:7], v2
+buffer_atomic_cmpswap_x2 v[1:2], off, s[4:7], v[3:4]
+"""
+
+    _GCN_PARTIAL_ATOMIC = """\
+buffer_load_dwordx4 v[1:4], off, s[4:7], 0
+global_atomic_add v1, off, s[4:7], v2
+"""
+
+    _GCN_ONLY_GLOBAL_ATOMICS = """\
+global_atomic_add v1, off, s[4:7], v2
+global_atomic_cmpswap v1, off, s[4:7], v[2:3]
+flat_atomic_add v1, off, s[4:7], v2
+"""
+
+    def _entry(self, gcn: str):
+        return {
+            "payload": {
+                "metadata": {"backend_name": "hip"},
+                "file_content": {
+                    "kernel.ttgir": self._TTGIR,
+                    "kernel.amdgcn": gcn,
+                },
+                "file_path": {},
+                "source_mappings": {},
+            }
+        }
+
+    def _run_pass(self, gcn: str):
+        adapter = get_backend_registry().resolve(adapter_name="hip_triton")
+        return adapter.run_analysis_pass(
+            "amd_buffer_ops", self._entry(gcn), AnalyzerContext()
+        )
+
+    def test_all_buffer_enabled(self):
+        result = self._run_pass(self._GCN_ALL_BUFFER)
+        status = result["amd_buffer_ops"]
+        self.assertTrue(status["enabled"])
+        self.assertEqual(status["status"], "all_buffer")
+        self.assertEqual(status["buffer_load_count"], 1)
+        self.assertEqual(status["buffer_store_count"], 1)
+        self.assertEqual(status["global_load_count"], 0)
+        self.assertEqual(status["global_store_count"], 0)
+
+    def test_partial_not_enabled(self):
+        result = self._run_pass(self._GCN_PARTIAL)
+        status = result["amd_buffer_ops"]
+        self.assertFalse(status["enabled"])
+        self.assertEqual(status["status"], "partial")
+
+    def test_no_buffer_ops(self):
+        result = self._run_pass(self._GCN_NONE)
+        status = result["amd_buffer_ops"]
+        self.assertFalse(status["enabled"])
+        self.assertEqual(status["status"], "none")
+
+    def test_no_memops_unknown(self):
+        result = self._run_pass(self._GCN_NO_MEMOPS)
+        status = result["amd_buffer_ops"]
+        self.assertFalse(status["enabled"])
+        self.assertEqual(status["status"], "unknown")
+
+    def test_ttgir_prefix_and_atomics(self):
+        """Real amdg. prefix counted; load_to_local not double-counted."""
+        result = self._run_pass(self._GCN_ALL_BUFFER)
+        ttgir = result["io_counts"]["amd_ttgir_bufferops_count"]
+        self.assertEqual(ttgir["tt.load_count"], 1)
+        self.assertEqual(ttgir["tt.store_count"], 1)
+        self.assertEqual(ttgir["tt.atomic_rmw_count"], 1)
+        self.assertEqual(ttgir["tt.atomic_cas_count"], 0)
+        self.assertEqual(ttgir["amdg.buffer_load_count"], 1)
+        self.assertEqual(ttgir["amdg.buffer_load_to_local_count"], 1)
+        self.assertEqual(ttgir["amdg.buffer_store_count"], 0)
+        self.assertEqual(ttgir["amdg.buffer_atomic_rmw_count"], 1)
+        self.assertEqual(ttgir["amdg.buffer_atomic_cas_count"], 0)
+
+    def test_legacy_amdgpu_prefix_counted(self):
+        """Historical amdgpu. spelling still matches."""
+        from tritonparse.parse.ir_analysis import process_amd_ttgir_bufferops
+
+        counts = process_amd_ttgir_bufferops(
+            "k.ttgir",
+            {"k.ttgir": "%x = amdgpu.buffer_load %p : !tt.ptr<f32>"},
+            {},
+        )
+        self.assertEqual(counts["amdg.buffer_load_count"], 1)
+
+    def test_all_buffer_atomics_enabled(self):
+        result = self._run_pass(self._GCN_ALL_BUFFER_ATOMICS)
+        status = result["amd_buffer_ops"]
+        self.assertTrue(status["enabled"])
+        self.assertEqual(status["status"], "all_buffer")
+        self.assertEqual(status["buffer_atomic_count"], 2)
+
+    def test_partial_with_global_atomics(self):
+        result = self._run_pass(self._GCN_PARTIAL_ATOMIC)
+        status = result["amd_buffer_ops"]
+        self.assertFalse(status["enabled"])
+        self.assertEqual(status["status"], "partial")
+        self.assertEqual(status["global_atomic_count"], 1)
+
+    def test_only_global_atomics(self):
+        result = self._run_pass(self._GCN_ONLY_GLOBAL_ATOMICS)
+        status = result["amd_buffer_ops"]
+        self.assertFalse(status["enabled"])
+        self.assertEqual(status["status"], "none")
+        self.assertEqual(status["global_atomic_count"], 2)
+        self.assertEqual(status["flat_atomic_count"], 1)
+
+    def test_status_keeps_io_counts(self):
+        """The new field is additive: existing io_counts are unchanged."""
+        result = self._run_pass(self._GCN_ALL_BUFFER)
+        self.assertIn("io_counts", result)
+        self.assertIn("amd_buffer_ops", result)
+        self.assertEqual(
+            result["io_counts"]["amd_gcn_bufferops_count"]["buffer_load_count"], 1
+        )
+
+    def test_legacy_path_emits_status(self):
+        """Legacy fallback (unknown backend) emits amd_buffer_ops too."""
+        old = os.environ.pop("TRITONPARSE_ANALYSIS", None)
+        try:
+            entry = self._entry(self._GCN_ALL_BUFFER)
+            entry["payload"]["metadata"] = {"backend_name": "unknown"}
+            result = _generate_ir_analysis(entry, AnalyzerContext())
+        finally:
+            if old is not None:
+                os.environ["TRITONPARSE_ANALYSIS"] = old
+        self.assertIn("amd_buffer_ops", result)
+        self.assertTrue(result["amd_buffer_ops"]["enabled"])
+
+    _GCN_REALISTIC_BLOCK = """\
+s_waitcnt vmcnt(0) lgkmcnt(0)
+s_buffer_load_dwordx4 s[0:3], s[4:7], 0
+buffer_load_dword v1, off, s[4:7], 0
+buffer_load_dwordx2 v[2:3], off, s[4:7], 0
+buffer_store_dwordx4 v[1:4], off, s[4:7], 0
+global_load_dwordx4 v[5:8], off, s[8:11], 0
+; spill: buffer_load_dword v9, off, s[12:15], 0
+v_add_u32 v1, v2, v3
+"""
+
+    def test_realistic_gcn_block_counts(self):
+        """Realistic disassembly text: scalar s_ prefix and comment lines
+        count (line-based substring matching), one global op flips the
+        verdict to partial."""
+        result = self._run_pass(self._GCN_REALISTIC_BLOCK)
+        status = result["amd_buffer_ops"]
+        self.assertFalse(status["enabled"])
+        self.assertEqual(status["status"], "partial")
+        self.assertEqual(status["buffer_load_count"], 4)
+        self.assertEqual(status["buffer_store_count"], 1)
+        self.assertEqual(status["global_load_count"], 1)
+        self.assertEqual(status["global_store_count"], 0)
+        self.assertTrue(status["reason"])
+
+
+class TestStageParserContract(unittest.TestCase):
+    """Guards for the bug class that left LLIR silently unmapped.
+
+    LLIR was declared `supports_source_mapping=True` with
+    `parser_id="generic_loc"` -- an MLIR parser -- on both the NVIDIA and AMD
+    adapters. It matched nothing in a .llir file, so the stage advertised a
+    capability it never delivered and nothing failed. These two tests make that
+    shape detectable: the first at declaration time, the second at runtime.
+    """
+
+    # A mappable stage's parser must suit the IR's own syntax. `syntax_id`
+    # already records the format, so a mismatch is visible in the descriptor
+    # without running anything.
+    #
+    # Deliberately EXHAUSTIVE: a mappable stage whose syntax_id is absent here
+    # fails. Leaving it permissive would reproduce the original bug's failure
+    # mode -- a new backend could add a stage with an unrecognised syntax and
+    # the wrong parser, and this test would stay green. Adding a backend
+    # therefore requires one deliberate line below.
+    ALLOWED_PARSERS = {
+        "mlir": {"generic_loc"},
+        "llvm": {"llvm_dbg"},
+        "ptx": {"ptx_loc"},
+        # both are legitimate: NVIDIA SASS and AMD GCN are different assemblies
+        "asm": {"sass_loc", "amdgcn_loc"},
+    }
+
+    def _adapters(self):
+        from tritonparse import backend as backend_mod
+
+        seen = []
+        for name, obj in vars(backend_mod).items():
+            if (
+                isinstance(obj, type)
+                and name.endswith("Adapter")
+                and obj is not backend_mod.CompilationPipelineAdapter
+            ):
+                try:
+                    seen.append((name, obj()))
+                except Exception:  # adapters needing a live backend
+                    continue
+        self.assertTrue(seen, "no adapters discovered")
+        return seen
+
+    def test_parser_id_matches_syntax_id_for_mappable_stages(self):
+        """Catches `generic_loc` on a non-MLIR stage, which is the original bug."""
+        bad = []
+        for adapter_name, adapter in self._adapters():
+            for stage in adapter.list_ir_stages():
+                if not stage.supports_source_mapping:
+                    continue
+                allowed = self.ALLOWED_PARSERS.get(stage.syntax_id)
+                if allowed is None:
+                    bad.append(
+                        f"{adapter_name}.{stage.name}: syntax_id="
+                        f"{stage.syntax_id!r} is not in ALLOWED_PARSERS. Add it "
+                        f"with the parser_id(s) valid for that syntax, so a new "
+                        f"backend cannot ship a mappable stage with a parser "
+                        f"that does not understand its format."
+                    )
+                elif stage.parser_id not in allowed:
+                    bad.append(
+                        f"{adapter_name}.{stage.name}: parser_id="
+                        f"{stage.parser_id!r} but syntax_id={stage.syntax_id!r} "
+                        f"expects one of {sorted(allowed)}"
+                    )
+        self.assertEqual(bad, [], "parser/syntax mismatch on a mappable stage")
+
+    def test_mappable_stages_actually_produce_mappings(self):
+        """A registered parser that silently matches nothing must fail loudly.
+
+        Runs every mappable stage's own parser over the checked-in example
+        trace, which inlines `file_content` for each stage, and requires a
+        non-empty result. Catches a parser that is wired up correctly but does
+        not understand the format it was given.
+        """
+        import json
+        from importlib.resources import files
+
+        log = files("tests").joinpath(
+            "example_output",
+            "logs",
+            "dedicated_log_triton_trace_findhao_.ndjson",
+        )
+        self.assertTrue(log.is_file(), f"Required example trace not available: {log}")
+
+        adapter = NvidiaTritonAdapter()
+        by_stage = {s.name: s for s in adapter.list_ir_stages()}
+        checked = set()
+        with log.open() as fh:
+            for line in fh:
+                event = json.loads(line)
+                if event.get("event_type") != "compilation":
+                    continue
+                for fname, content in event["payload"]["file_content"].items():
+                    stage = by_stage.get(fname.rsplit(".", 1)[-1])
+                    if stage is None or not stage.supports_source_mapping:
+                        continue
+                    parser = adapter.get_parser(stage.parser_id)
+                    self.assertIsNotNone(
+                        parser, f"{stage.name}: parser {stage.parser_id} missing"
+                    )
+                    result = parser(content, None, stage.name)
+                    self.assertTrue(
+                        result,
+                        f"{stage.name} declares supports_source_mapping=True but "
+                        f"parser {stage.parser_id!r} produced no mappings",
+                    )
+                    checked.add(stage.name)
+        self.assertIn("llir", checked, "llir not exercised by this fixture")
+        self.assertGreaterEqual(len(checked), 3, f"only checked {checked}")
+
+
 if __name__ == "__main__":
     unittest.main()

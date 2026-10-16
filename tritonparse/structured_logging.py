@@ -1,7 +1,6 @@
 #  Copyright (c) Meta Platforms, Inc. and affiliates.
 
 import atexit
-import fnmatch
 import gzip
 import hashlib
 import inspect
@@ -29,6 +28,10 @@ import zstandard as zstd  # @manual=fbsource//third-party/pypi/zstandard:zstanda
 # a top-level `import torch` here would create a circular import. See D100891381
 # for the original incident and D105172002 for the torch-side workaround.
 from tritonparse._json_compat import dumps, loads
+from tritonparse.kernel_filter import (
+    first_matching_kernel_pattern,
+    parse_kernel_patterns,
+)
 
 from .shared_vars import (
     DEFAULT_TRACE_FILE_PREFIX,
@@ -41,6 +44,12 @@ log = logging.getLogger(__name__)
 
 TEXT_FILE_EXTENSIONS = [".ttir", ".ttgir", ".llir", ".ptx", ".amdgcn", ".json"]
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB limit for file content extraction
+# Size cap for a launch event's "function" handle. Triton documents this as an
+# opaque backend value (CUDA/HIP report an int address or None), but some
+# backends hand back the whole compiled binary instead — megabytes per launch
+# event, which dwarfs everything else in the trace. Nothing downstream reads
+# the handle, so anything above the cap is replaced by a size summary.
+MAX_LAUNCH_FUNCTION_CHARS = 256
 
 triton_trace_log = logging.getLogger("tritonparse_trace")
 # The folder to store the triton trace log.
@@ -68,6 +77,18 @@ TRITON_FULL_PYTHON_SOURCE = os.getenv("TRITON_FULL_PYTHON_SOURCE", "0") in [
     "true",
     "True",
 ]
+# Runtime override for full-Python-source extraction, set by
+# init(enable_full_python_source=...). None means "no override, honor
+# TRITON_FULL_PYTHON_SOURCE".
+#
+# Note the asymmetry with the SASS switch below: TRITONPARSE_DUMP_SASS has to be
+# turned into an override at module import time (set_runtime_sass_dump_override)
+# because shared_vars.get_enabled_derived_artifacts() is also consulted by the
+# reader/parse side, which can run without init() ever being called. This flag is
+# only ever read from extract_python_source_info() during compilation, i.e.
+# strictly after init() installed the compilation listener, so a plain runtime
+# override is sufficient and no import-time hook is needed.
+_RUNTIME_FULL_PYTHON_SOURCE_OVERRIDE: Optional[bool] = None
 # Compression algorithm for raw trace files
 # When enabled, each JSON record is compressed as a separate frame/member
 # and concatenated in sequence within a .bin.ndjson file.
@@ -98,6 +119,15 @@ set_runtime_sass_dump_override(
 
 # The flag to mark if launch is traced. It is used to avoid initilizing the launch hook twice.
 _trace_launch_enabled = False
+# Set once the first oversized launch "function" handle is summarized, so the
+# message is emitted once per process instead of once per kernel launch.
+_logged_oversized_launch_function = False
+# Derived-artifact failures already reported, keyed by
+# (adapter name, target stage name, exception type name). Derivation runs once
+# per compilation, so an environment-level problem such as a missing external
+# tool would otherwise warn once per kernel; this keeps it to once per process
+# per artifact/error kind while still making the failure visible.
+_logged_derived_artifact_failures: set[tuple[str, str, str]] = set()
 # Per-hash run counter and per-launch blob save flag for skip/max runs gating
 _kernel_run_counts_per_hash: dict[str, int] = {}
 _save_blobs_for_current_launch = True
@@ -722,19 +752,13 @@ def parse_kernel_allowlist() -> Optional[List[str]]:
     Returns:
         List[str] or None: List of kernel name patterns to trace, or None if all kernels should be traced
     """
-    if not TRITONPARSE_KERNEL_ALLOWLIST:
+    patterns = parse_kernel_patterns(TRITONPARSE_KERNEL_ALLOWLIST)
+    if patterns is None:
         return None
 
-    # Split by comma and strip whitespace
-    patterns = [pattern.strip() for pattern in TRITONPARSE_KERNEL_ALLOWLIST.split(",")]
-    # Filter out empty patterns
-    patterns = [pattern for pattern in patterns if pattern]
-
-    if not patterns:
-        return None
-
-    log.debug(f"Kernel allowlist patterns: {patterns}")
-    return patterns
+    parsed_patterns = list(patterns)
+    log.debug(f"Kernel allowlist patterns: {parsed_patterns}")
+    return parsed_patterns
 
 
 def extract_kernel_name(src) -> Optional[str]:
@@ -788,16 +812,43 @@ def should_trace_kernel(
         log.debug("Cannot extract kernel name, skipping trace")
         return False
 
-    # Check if kernel name matches any pattern in the allowlist
-    for pattern in allowlist_patterns:
-        if fnmatch.fnmatch(kernel_name, pattern):
-            log.debug(f"Kernel '{kernel_name}' matches pattern '{pattern}', will trace")
-            return True
+    matching_pattern = first_matching_kernel_pattern(kernel_name, allowlist_patterns)
+    if matching_pattern is not None:
+        log.debug(
+            f"Kernel '{kernel_name}' matches pattern '{matching_pattern}', will trace"
+        )
+        return True
 
     log.debug(
         f"Kernel '{kernel_name}' does not match any allowlist pattern, skipping trace"
     )
     return False
+
+
+def set_runtime_full_python_source_override(enabled: Optional[bool]) -> None:
+    """Set a runtime override for full-Python-source extraction.
+
+    Args:
+        enabled (Optional[bool]): True forces full-file capture, False forces
+            function-only capture, None clears the override so that the
+            TRITON_FULL_PYTHON_SOURCE environment variable decides.
+    """
+    global _RUNTIME_FULL_PYTHON_SOURCE_OVERRIDE
+    _RUNTIME_FULL_PYTHON_SOURCE_OVERRIDE = enabled
+
+
+def is_full_python_source_enabled() -> bool:
+    """Return whether full Python source extraction is enabled.
+
+    Precedence: the runtime override set by ``init(enable_full_python_source=...)``
+    wins over the ``TRITON_FULL_PYTHON_SOURCE`` environment variable. When no
+    override is set (the default), the environment variable alone decides, so
+    existing callers keep today's behavior.
+    """
+    if _RUNTIME_FULL_PYTHON_SOURCE_OVERRIDE is not None:
+        return _RUNTIME_FULL_PYTHON_SOURCE_OVERRIDE
+
+    return TRITON_FULL_PYTHON_SOURCE
 
 
 def extract_python_source_info(trace_data: Dict[str, Any], source):
@@ -808,13 +859,19 @@ def extract_python_source_info(trace_data: Dict[str, Any], source):
     from the provided source object (typically an ASTSource or IRSource instance).
     It adds file path, line numbers, and the actual source code to the trace_data.
 
-    By default, only the function definition is extracted. Set TRITON_FULL_PYTHON_SOURCE=1
-    to extract the entire Python source file.
+    By default, only the function definition is extracted. Pass
+    init(enable_full_python_source=True) or set TRITON_FULL_PYTHON_SOURCE=1 to
+    extract the entire Python source file. Function-only mode is lossy for nested
+    kernels: when the traced @triton.jit entry point is a thin wrapper that just
+    calls the real kernel, the captured source contains none of the real kernel
+    body, which breaks source mapping in `tritonparse diff` and in the viewer.
     @TODO: we should enable it by default in next diff and track the compilation time regression
 
     Environment Variables:
         TRITON_FULL_PYTHON_SOURCE: If set to "1", extract the full Python file
-                                   instead of just the function definition.
+                                   instead of just the function definition. The
+                                   init(enable_full_python_source=...) keyword
+                                   takes precedence over this variable.
         TRITON_MAX_SOURCE_SIZE: Maximum file size in bytes for full source extraction
                                (default: 10MB). Files larger than this will fall back
                                to function-only mode.
@@ -851,7 +908,7 @@ def extract_python_source_info(trace_data: Dict[str, Any], source):
 
     function_end_line = function_start_line + len(source_lines) - 1
 
-    if TRITON_FULL_PYTHON_SOURCE:
+    if is_full_python_source_enabled():
         # Full file mode: read the entire Python file
         try:
             # Check file size before reading
@@ -935,6 +992,55 @@ def extract_file_content(
     _extract_file_content_legacy(trace_data, metadata_group)
 
 
+def _record_derived_artifact_failure(
+    trace_data: Dict[str, Any],
+    derived_filename: str,
+    adapter_name: str,
+    target_stage_name: str,
+    tool_name: str,
+    exc: Exception,
+):
+    """Record a failed optional derived artifact instead of aborting the trace.
+
+    A placeholder is stored under the artifact's filename in ``file_content`` so
+    the failure is visible in the trace itself, and a warning is logged once per
+    (adapter, artifact, exception type) per process so that a systemic problem
+    such as a missing external tool does not produce one line per kernel.
+
+    Args:
+        trace_data (Dict[str, Any]): Trace event being populated.
+        derived_filename (str): Filename the artifact would have been stored under.
+        adapter_name (str): Backend adapter that owns the artifact, or "legacy".
+        target_stage_name (str): Name of the derived stage (e.g. "sass").
+        tool_name (str): External tool that produces it (e.g. "nvdisasm").
+        exc (Exception): The exception raised by the derivation function. Both
+            callers catch `Exception`, not `BaseException`, so KeyboardInterrupt
+            and SystemExit still propagate.
+    """
+    if isinstance(exc, subprocess.CalledProcessError):
+        message = f"<{tool_name} failed: {str(exc)}>"
+    elif isinstance(exc, (OSError, UnicodeDecodeError)):
+        message = f"<error dumping derived artifact: {str(exc)}>"
+    else:
+        message = f"<error dumping derived artifact with {tool_name}: {str(exc)}>"
+    trace_data["file_content"][derived_filename] = message
+
+    dedup_key = (adapter_name, target_stage_name, type(exc).__name__)
+    if dedup_key in _logged_derived_artifact_failures:
+        return
+    _logged_derived_artifact_failures.add(dedup_key)
+    log.warning(
+        "Derived artifact '%s' could not be produced by %s (adapter: %s): %s: %s. "
+        "This artifact is optional; the rest of the trace was written normally. "
+        "Further failures of this kind are not logged.",
+        target_stage_name,
+        tool_name,
+        adapter_name,
+        type(exc).__name__,
+        exc,
+    )
+
+
 def _extract_file_content_adapter_driven(
     trace_data: Dict[str, Any],
     metadata_group: Dict[str, str],
@@ -1002,16 +1108,30 @@ def _extract_file_content_adapter_driven(
             )
             continue
         derived_filename = f"{filename_no_ext}{target_stage.extension}"
+        # Derived artifacts are optional by construction: they are produced by
+        # running an external tool over an artifact that has already been
+        # captured. If that tool is missing or fails, everything else in this
+        # trace event is still valid, so contain *any* exception from
+        # derive_func here. Letting one escape would propagate out of
+        # maybe_trace_triton and abort the whole trace write, losing every other
+        # stage as well -- e.g. nvdisasm not being on the path raised an
+        # uncaught RuntimeError and produced no raw_logs at all.
+        # This is deliberately narrow in scope: only the optional derive_func
+        # call is wrapped, so failures in required extraction stages still
+        # surface normally.
         try:
             content = info.derive_func(source_path)
             if content is not None:
                 trace_data["file_content"][derived_filename] = content
-        except subprocess.CalledProcessError as e:
-            message = f"<{info.tool_name} failed: {str(e)}>"
-            trace_data["file_content"][derived_filename] = message
-        except (OSError, UnicodeDecodeError) as e:
-            message = f"<error dumping derived artifact: {str(e)}>"
-            trace_data["file_content"][derived_filename] = message
+        except Exception as e:
+            _record_derived_artifact_failure(
+                trace_data,
+                derived_filename,
+                adapter_name,
+                info.target_stage_name,
+                info.tool_name,
+                e,
+            )
 
 
 def _extract_file_content_legacy(
@@ -1053,15 +1173,15 @@ def _extract_file_content_legacy(
 
             sass_content = tritonparse.tools.disasm.extract(cubin_path)
             trace_data["file_content"][sass_filename] = sass_content
-        except subprocess.CalledProcessError as e:
-            message = f"<nvdisasm failed: {str(e)}>"
-            trace_data["file_content"][sass_filename] = message
-        except OSError as e:
-            message = f"<error reading cubin file: {str(e)}>"
-            trace_data["file_content"][sass_filename] = message
         except Exception as e:
-            message = f"<error dumping SASS: {str(e)}>"
-            trace_data["file_content"][sass_filename] = message
+            # Containment here is not new: this path always ended in a catch-all,
+            # so the abort described above was only ever reachable through the
+            # adapter-driven path. Routing it through the shared helper is what
+            # unifies the placeholder text between the two paths and adds the
+            # deduplicated warning.
+            _record_derived_artifact_failure(
+                trace_data, sass_filename, "legacy", "sass", "nvdisasm", e
+            )
 
 
 def extract_metadata_from_src(trace_data, src):
@@ -1095,7 +1215,11 @@ class TritonJsonFormatter(logging.Formatter):
         log_entry = record.metadata
         payload = record.payload
 
-        log_entry["timestamp"] = self.formatTime(record, "%Y-%m-%dT%H:%M:%S.%fZ")
+        # time.strftime (used by formatTime) does not support %f, so append
+        # microseconds manually.
+        base = self.formatTime(record, "%Y-%m-%dT%H:%M:%S")
+        micros = int(record.created * 1_000_000) % 1_000_000
+        log_entry["timestamp"] = f"{base}.{micros:06d}Z"
         if payload is not None:
             log_entry["payload"] = loads(payload)
         clean_log_entry = convert(log_entry)
@@ -1740,6 +1864,109 @@ class JITHookImpl:
         return True
 
 
+def summarize_launch_function(function: Any) -> Union[int, str, None]:
+    """
+    Reduce a launch event's ``function`` handle to something small enough to log.
+
+    ``None`` and ``int`` — the shape Triton documents and what CUDA/HIP report —
+    pass through untouched (``bool`` excepted; see below). Every other type is
+    stringified, and replaced by a size summary once it exceeds
+    ``MAX_LAUNCH_FUNCTION_CHARS``.
+
+    The cap is always measured against the string this returns, never against
+    the input: a binary handle renders as up to four characters per byte, so
+    sizing the input in bytes and returning its repr would let the field run
+    several times over the limit.
+
+    Args:
+        function: The raw ``function`` value from Triton's launch metadata.
+
+    Returns:
+        The original handle, or a string of at most
+        ``MAX_LAUNCH_FUNCTION_CHARS`` characters.
+    """
+    # `bool` subclasses `int`, but a JSON boolean is not an integer — the
+    # validator rejects one for the schema's "integer", and it matches neither
+    # "string" nor "null" either. Letting it through would emit a record that
+    # fails validation, which is the exact failure this function exists to
+    # prevent, so a bool falls through to be stringified below.
+    if function is None or (
+        isinstance(function, int) and not isinstance(function, bool)
+    ):
+        return function
+
+    # Bytes-like handles are sized before rendering, because rendering a
+    # multi-MB one is exactly what this function exists to avoid. The byte
+    # count is only a cheap-to-render guard, though — the cap is applied to the
+    # rendered string below, since that is what actually lands in the trace.
+    # A byte renders as up to four characters (``\xNN``), so a handle that
+    # clears the guard costs at most ~4x the limit to render and discard.
+    if isinstance(function, (bytes, bytearray, memoryview)):
+        # nbytes, not len(): len() of a memoryview counts elements, which
+        # equals the byte count only when itemsize == 1.
+        size = function.nbytes if isinstance(function, memoryview) else len(function)
+        if size <= MAX_LAUNCH_FUNCTION_CHARS:
+            # ``str()`` of a memoryview renders its address, not its content, so
+            # it would differ between two runs holding identical bytes — enough
+            # to make the field look like it varies across launches.
+            rendered = (
+                str(bytes(function))
+                if isinstance(function, memoryview)
+                else str(function)
+            )
+            if len(rendered) <= MAX_LAUNCH_FUNCTION_CHARS:
+                return rendered
+            # The byte count cleared the guard, so it is not what tripped the
+            # cap — saying "N bytes, above the N limit" here would contradict
+            # itself. Name the rendered length, which is what actually did.
+            _log_oversized_launch_function(
+                type(function).__name__, len(rendered), "chars"
+            )
+        else:
+            _log_oversized_launch_function(type(function).__name__, size, "bytes")
+        # The summary reports the handle's own size either way: for a binary
+        # handle that is the number worth knowing, not its repr length.
+        return f"<{type(function).__name__}: {size} bytes omitted>"
+
+    text = str(function)
+    if len(text) <= MAX_LAUNCH_FUNCTION_CHARS:
+        return text
+    _log_oversized_launch_function(type(function).__name__, len(text), "chars")
+    return f"<{type(function).__name__}: {len(text)} chars omitted>"
+
+
+def _log_oversized_launch_function(type_name: str, size: int, unit: str) -> None:
+    """
+    Record that a launch ``function`` handle was summarized, at most once.
+
+    Debug level on purpose. For a backend whose handle is not a scalar this
+    fires on every run of every process, yet nothing is wrong and there is
+    nothing to act on — and the trace already states the same fact in the field
+    itself, as ``<bytes: N bytes omitted>``. Logging it louder would put a
+    permanent, unactionable warning in front of every user of that backend.
+
+    The dedup is best-effort, not a guarantee: the flag is read and set without
+    a lock, so two threads summarizing their first oversized handle at the same
+    moment can both log. That is deliberate. The goal is "do not repeat this on
+    every launch", not "exactly once", and the whole cost of losing the race is
+    a duplicate debug line that is off by default — not worth synchronizing a
+    function on the launch path for.
+    """
+    global _logged_oversized_launch_function
+    if _logged_oversized_launch_function:
+        return
+    _logged_oversized_launch_function = True
+    log.debug(
+        "[tritonparse] Launch metadata 'function' is a %s of %d %s, above the "
+        "%d limit; logging a size summary instead. The handle is an opaque "
+        "backend value that no tritonparse analysis reads.",
+        type_name,
+        size,
+        unit,
+        MAX_LAUNCH_FUNCTION_CHARS,
+    )
+
+
 class LaunchHookImpl:
     """
     Launch Hook implementation for capturing and logging kernel launch metadata.
@@ -1789,7 +2016,7 @@ class LaunchHookImpl:
 
         trace_data = defaultdict(dict)
         trace_data["name"] = metadata_dict["name"]
-        trace_data["function"] = metadata_dict["function"]
+        trace_data["function"] = summarize_launch_function(metadata_dict["function"])
         trace_data["stream"] = metadata_dict["stream"]
         launch_metadata_tritonparse = metadata_dict.get(
             "launch_metadata_tritonparse", None
@@ -1845,6 +2072,31 @@ def enable_launch_tracing() -> None:
     _trace_launch_enabled = True
 
     log.debug("[tritonparse] Launch tracing enabled")
+
+
+def _enable_inductor_jit_post_compile_hook() -> None:
+    """Propagate launch tracing to torch inductor's JIT post-compile gate.
+
+    Inductor checks ``torch._inductor.config.run_jit_post_compile_hook`` at
+    compile time before simulating the JIT hook that installs tritonparse's
+    launch_metadata (torch/_inductor/runtime/triton_heuristics.py). That config
+    is initialized once from the environment at torch import time, so setting
+    only tritonparse's own module global never reaches it. Set both channels:
+    os.environ for future subprocess/spawn workers (fresh interpreters re-read
+    the env var at import), and the live module attribute for this process
+    (inline compilation and fork pools created after init()).
+
+    Best effort and one-way: missing torch, or an older torch without the
+    attribute, is a no-op; clear_logging_config() deliberately does not revert
+    it since already-captured launchers cannot be un-built.
+    """
+    os.environ["TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK"] = "1"
+    try:
+        from torch._inductor import config as inductor_config
+    except ImportError:
+        return
+    if hasattr(inductor_config, "run_jit_post_compile_hook"):
+        inductor_config.run_jit_post_compile_hook = True
 
 
 def _autotune_listener(*, fn, key, best_config, configs_timings, duration, cache_hit):
@@ -1922,6 +2174,7 @@ def init(
     enable_trace_launch_within_profiling: bool = False,
     enable_more_tensor_information: bool = False,
     enable_sass_dump: Optional[bool] = False,
+    enable_full_python_source: Optional[bool] = None,
     enable_tensor_blob_storage: bool = False,
     tensor_storage_quota: Optional[int] = None,
     compression: Optional[str] = None,
@@ -1944,6 +2197,14 @@ def init(
         enable_more_tensor_information (bool): Whether to enable more tensor information logging.
             It only works when enable_trace_launch/TRITON_TRACE_LAUNCH is True.
         enable_sass_dump (Optional[bool]): Whether to enable SASS dumping.
+        enable_full_python_source (Optional[bool]): Whether to capture the whole Python
+            source file of a kernel instead of only its function definition. Three-state:
+            True forces full-file capture, False forces function-only capture, and None
+            (the default) leaves TRITON_FULL_PYTHON_SOURCE in charge, so callers that do
+            not pass this keyword keep today's behavior. An explicitly passed bool wins
+            over the environment variable. Enabling this matters for nested kernels,
+            where the traced @triton.jit entry point is only a thin wrapper around the
+            real kernel and function-only capture records none of the real kernel body.
         enable_tensor_blob_storage (bool): Whether to enable tensor blob storage.
         tensor_storage_quota (Optional[int]): Storage quota in bytes for tensor blobs (default: 100GB).
         compression (Optional[str]): Compression format for trace files ("none", "gzip", "zstd", or "clp").
@@ -1972,9 +2233,20 @@ def init(
     elif enable_trace_launch_within_profiling:
         TRITON_TRACE_LAUNCH_WITHIN_PROFILING = True
         TORCHINDUCTOR_RUN_JIT_POST_COMPILE_HOOK = True
+    if TRITON_TRACE_LAUNCH or TRITON_TRACE_LAUNCH_WITHIN_PROFILING:
+        # Reach torch inductor too: tritonparse's own global above is not read
+        # by inductor, which gates on its own config value / env var.
+        _enable_inductor_jit_post_compile_hook()
     if enable_more_tensor_information:
         TRITONPARSE_MORE_TENSOR_INFORMATION = True
     set_runtime_sass_dump_override(True if enable_sass_dump else None)
+    # Passing the caller's value straight through is what makes None mean "no
+    # override, TRITON_FULL_PYTHON_SOURCE decides", so callers that omit the
+    # keyword keep today's behavior. As with enable_sass_dump above, the last
+    # init() call wins. Unlike enable_sass_dump, an explicit False here does force
+    # function-only capture instead of quietly deferring to the environment
+    # variable, which is why the default is None rather than False.
+    set_runtime_full_python_source_override(enable_full_python_source)
     if enable_tensor_blob_storage:
         TRITONPARSE_SAVE_TENSOR_BLOBS = True
 
@@ -1995,10 +2267,20 @@ def init(
         TRITONPARSE_TENSOR_SAVE_MAX_RUNS = tensor_save_max_runs
 
     init_basic(trace_folder)
+    # knobs on Triton >= 3.4, a legacy shim on Triton <= 3.3 (no triton.knobs)
     from . import _knobs_compat as _kc
 
     _kc.set_compilation_listener(maybe_trace_triton)
-    _kc.set_autotune_listener(_autotune_listener)
+    if not _kc.set_autotune_listener(_autotune_listener):
+        # Triton 3.7 removed knobs.autotuning.listener (and Triton <= 3.3 has no
+        # knobs); without it the writer cannot emit raw 'autotune' events. Not an
+        # error -- the derived autotune_analysis/autotune_summary events come from
+        # compilations and launches -- but worth one line so a missing event type
+        # in a regenerated trace does not send anyone spelunking.
+        log.debug(
+            "[tritonparse] knobs.autotuning.listener not present "
+            "(triton >= 3.7, or <= 3.3); raw 'autotune' events will not be recorded"
+        )
 
 
 def init_with_env():
@@ -2036,6 +2318,18 @@ def clear_logging_config():
     triton_trace_folder = None
     _KERNEL_ALLOWLIST_PATTERNS = None
     _trace_launch_enabled = False
+    # The derived-artifact warning is deduplicated for the lifetime of a tracing
+    # session, not of the process: a second session in the same process has its
+    # own trace files, so a still-missing external tool has to warn again there.
+    _logged_derived_artifact_failures.clear()
+    # init() installs this override, so clearing the config has to take it back
+    # out; TritonParseManager.__exit__ calls us, and leaving it set would keep
+    # forcing full-file capture on everything the process compiles afterwards.
+    # The SASS override in shared_vars is deliberately NOT reset here: it is
+    # where the import-time value of TRITONPARSE_DUMP_SASS is stored, so
+    # clearing it would silently disable that environment variable instead of
+    # restoring it.
+    set_runtime_full_python_source_override(None)
 
     # 3. Reset tensor blob manager and related flags
     TENSOR_BLOB_MANAGER = None

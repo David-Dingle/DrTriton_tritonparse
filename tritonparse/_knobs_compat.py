@@ -103,10 +103,13 @@ def set_compilation_listener(listener) -> None:
         _remove_legacy_compilation_wrapper()
 
 
-def set_autotune_listener(listener) -> None:
-    """Install/clear the autotune listener; no-op on legacy Triton."""
+def set_autotune_listener(listener) -> bool:
+    """Install/clear the autotune listener. Returns False where Triton has no autotune listener
+    (Triton <= 3.3, no knobs; Triton >= 3.7 removed knobs.autotuning.listener): a no-op there."""
     if HAS_KNOBS and hasattr(_knobs.autotuning, "listener"):
         _knobs.autotuning.listener = listener
+        return True
+    return False
 
 
 _warned_launch = False

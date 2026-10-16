@@ -1,11 +1,11 @@
 #  Copyright (c) Meta Platforms, Inc. and affiliates.
 
 import argparse
-import os
 import shutil
 from pathlib import Path
 from typing import Optional
 
+from tritonparse.kernel_filter import parse_kernel_patterns
 from tritonparse.shared_vars import is_fbcode
 
 from .common import (
@@ -76,6 +76,15 @@ def _add_parse_args(parser: argparse.ArgumentParser) -> None:
         help="Analyze all ranks (includes files without rank)",
         action="store_true",
     )
+    parser.add_argument(
+        "--kernel-allowlist",
+        type=str,
+        help=(
+            "Parse only kernels whose names match one of these comma-separated "
+            "fnmatch patterns. Complete kernel and autotune event groups are kept; "
+            "this option does not control trace capture."
+        ),
+    )
     parser.add_argument("-v", "--verbose", help="Verbose logging", action="store_true")
     parser.add_argument(
         "--torch-trace-dir",
@@ -126,6 +135,7 @@ def oss_run(
     torch_trace_dir: Optional[str] = None,
     procedure_checks: list = None,
     no_pre_init_attribution: bool = False,
+    kernel_allowlist: Optional[str] = None,
 ):
     """
     Main function for tritonparse. It is for OSS only.
@@ -145,20 +155,26 @@ def oss_run(
             CLI flag --no-pre-init-attribution). Default False, so by
             default no-rank trace files with PID matching a ranked file
             are merged into that rank's output.
+        kernel_allowlist: Comma-separated fnmatch patterns for kernel names.
     """
     source = Source(source, verbose)
+    kernel_patterns = parse_kernel_patterns(kernel_allowlist)
+
+    if source.type == SourceType.LOCAL_CLP and kernel_patterns is not None:
+        raise RuntimeError(
+            "Kernel filtering is not supported for pre-parsed LOCAL_CLP input; "
+            "parse the original structured trace instead"
+        )
+
     rank_config = RankConfig.from_cli_args(rank, all_ranks, source.type)
 
-    # Check output directory early if specified
+    out_dir = None
     if out is not None:
         out_dir = Path(out)
-        if out_dir.exists():
-            if not overwrite:
-                raise RuntimeError(
-                    f"{out_dir} already exists, pass --overwrite to overwrite"
-                )
-            shutil.rmtree(out_dir)
-        os.makedirs(out_dir, exist_ok=True)
+        if out_dir.exists() and not overwrite:
+            raise RuntimeError(
+                f"{out_dir} already exists, pass --overwrite to overwrite"
+            )
 
     # For signpost logging (not implemented in Python version)
 
@@ -182,18 +198,21 @@ def oss_run(
             torch_trace_dir=torch_trace_dir,
             procedure_checks=procedure_checks,
             enable_pre_init_attribution=not no_pre_init_attribution,
+            kernel_patterns=kernel_patterns,
         )
     else:
         parsed_log_dir = source.value
 
-    if out is not None:
-        save_logs(Path(out), parsed_log_dir, overwrite, verbose)
+    if out_dir is not None:
+        if out_dir.exists():
+            shutil.rmtree(out_dir)
+        save_logs(out_dir, parsed_log_dir, overwrite, verbose)
     # Print beautiful summary of all parsed files
-    if out is not None:
-        out_dir = str(Path(out).absolute())
+    if out_dir is not None:
+        summary_dir = str(out_dir.absolute())
     else:
-        out_dir = str(Path(parsed_log_dir).absolute())
-    print_parsed_files_summary(out_dir)
+        summary_dir = str(Path(parsed_log_dir).absolute())
+    print_parsed_files_summary(summary_dir)
     return None
 
 
@@ -209,6 +228,7 @@ def unified_parse(
     torch_trace_dir: Optional[str] = None,
     procedure_checks_file: Optional[str] = None,
     no_pre_init_attribution: bool = False,
+    kernel_allowlist: Optional[str] = None,
     **kwargs,
 ):
     """
@@ -230,6 +250,9 @@ def unified_parse(
             default, no-rank trace files whose PID matches a ranked file
             are merged into that rank's output so kernels compiled before
             torch.distributed init are visible under their owning rank.
+        kernel_allowlist: Comma-separated fnmatch patterns for kernel names.
+            This filters existing trace logs and does not read the trace-time
+            TRITONPARSE_KERNEL_ALLOWLIST environment variable.
     """
     # Log usage for API invocations
     if not skip_logger and is_fbcode():
@@ -264,6 +287,7 @@ def unified_parse(
         torch_trace_dir=torch_trace_dir,
         procedure_checks=procedure_checks,
         no_pre_init_attribution=no_pre_init_attribution,
+        kernel_allowlist=kernel_allowlist,
         **kwargs,
     )
     return output

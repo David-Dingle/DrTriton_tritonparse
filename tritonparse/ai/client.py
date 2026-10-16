@@ -6,20 +6,57 @@ LLM Client abstractions for AI-powered analysis.
 This module provides:
 - Data structures for LLM communication (Message, Response, ToolCall)
 - Abstract base class LLMClient for different LLM providers
+- CLI clients for Claude Code, Codex, and Muse
 - MockClient for testing without actual LLM calls
 """
 
+import json
 import logging
 import os
 import subprocess
 import tempfile
+import threading
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Iterator, List, Optional, Tuple
 
 from tritonparse._json_compat import JSONDecodeError, loads
 
+try:
+    from security.frameworks.python.exec.subprocess import TrustedSubprocessWithList
+except ModuleNotFoundError as error:  # pragma: no cover - OSS source fallback
+    _missing_module = error.name or ""
+    if _missing_module != "security" and not _missing_module.startswith("security."):
+        raise
+
+    class TrustedSubprocessWithList:
+        """Portable fallback when Meta's trusted subprocess wrapper is unavailable."""
+
+        @staticmethod
+        def run(
+            *, executable: str, cmd_args: List[str], **kwargs: Any
+        ) -> "subprocess.CompletedProcess[Any]":
+            # The executable is fixed by the caller and dynamic values remain
+            # separate argv entries, so the OSS fallback never invokes a shell.
+            return subprocess.run([executable, *cmd_args], **kwargs)  # noqa: P204
+
+        @staticmethod
+        def Popen(
+            *, executable: str, cmd_args: List[str], **kwargs: Any
+        ) -> "subprocess.Popen[Any]":
+            # Same argv-list guarantee as run() above.
+            return subprocess.Popen([executable, *cmd_args], **kwargs)  # noqa: P204
+
+
 logger: logging.Logger = logging.getLogger(__name__)
+
+_CODEX_TRANSIENT_FAILURE_MARKERS: Tuple[str, ...] = (
+    "stream disconnected before completion",
+    "no_capacity",
+    "no capacity",
+)
 
 
 @dataclass
@@ -176,6 +213,547 @@ class MockClient(LLMClient):
         """
         response = self.chat(messages, temperature)
         yield response.content
+
+
+def _extract_single_turn_prompts(messages: List[Message]) -> Tuple[str, str]:
+    """Extract prompts for one-shot CLI clients.
+
+    One-shot clients support at most one system message and exactly one
+    user message. Anything else is a programming error, so fail fast.
+
+    Args:
+        messages: List of messages in the conversation.
+
+    Returns:
+        Tuple of (system_prompt, user_prompt). system_prompt is "" when the
+        conversation has no system message.
+
+    Raises:
+        ValueError: If the message shape is unsupported.
+    """
+    system_prompts: List[str] = []
+    user_prompts: List[str] = []
+    for message in messages:
+        if message.role == "system":
+            system_prompts.append(message.content)
+        elif message.role == "user":
+            user_prompts.append(message.content)
+        else:
+            raise ValueError(
+                "One-shot clients support at most one system message, exactly "
+                "one user message, and no other roles"
+            )
+
+    if len(system_prompts) > 1 or len(user_prompts) != 1:
+        raise ValueError(
+            "One-shot clients support at most one system message, exactly one "
+            "user message, and no other roles"
+        )
+
+    system_prompt = system_prompts[0] if system_prompts else ""
+    return system_prompt, user_prompts[0]
+
+
+def _format_cli_failure(stdout: str, stderr: str) -> str:
+    """Summarize a failed CLI invocation for error messages."""
+    stdout_tail = stdout[-500:].strip()
+    stderr_tail = stderr[-500:].strip()
+    if stdout_tail and stderr_tail:
+        return f"stdout: {stdout_tail}\nstderr: {stderr_tail}"
+    if stdout_tail:
+        return f"stdout: {stdout_tail}"
+    if stderr_tail:
+        return f"stderr: {stderr_tail}"
+    return "no stdout or stderr"
+
+
+class CodexClient(LLMClient):
+    """LLM client using the Codex CLI's non-interactive ``exec`` mode.
+
+    The client is intentionally read-only and ephemeral. System messages map to
+    invocation-scoped Codex developer instructions, while the user message is
+    supplied through stdin to avoid shell quoting and command-line length limits.
+    """
+
+    def __init__(
+        self,
+        retry_count: int = 3,
+        timeout: int = 600,
+        model: Optional[str] = None,
+        cwd: Optional[str] = None,
+    ) -> None:
+        if retry_count < 1:
+            raise ValueError("retry_count must be at least 1")
+        self.retry_count = retry_count
+        self.timeout = timeout
+        self.model = model
+        self.cwd = os.path.abspath(cwd) if cwd else cwd
+
+    def chat(
+        self,
+        messages: List[Message],
+        temperature: float = 0.0,
+        max_tokens: Optional[int] = None,
+    ) -> Response:
+        """Run one stateless Codex turn and return its final agent message."""
+        del temperature, max_tokens
+        system_prompt, user_prompt = _extract_single_turn_prompts(messages)
+
+        for attempt in range(1, self.retry_count + 1):
+            try:
+                result, content = self._run_once(system_prompt, user_prompt)
+            except subprocess.TimeoutExpired as error:
+                raise RuntimeError(
+                    f"Codex CLI timed out after {self.timeout}s"
+                ) from error
+            except OSError as error:
+                raise RuntimeError(f"Failed to launch Codex CLI: {error}") from error
+
+            if result.returncode == 0:
+                if not content:
+                    raise RuntimeError("Codex CLI returned no final response")
+                return Response(
+                    content=content,
+                    raw={
+                        "returncode": result.returncode,
+                        "stdout": result.stdout,
+                        "stderr": result.stderr,
+                    },
+                )
+
+            failure = _format_cli_failure(result.stdout, result.stderr)
+            if attempt == self.retry_count or not self._is_transient_failure(failure):
+                raise RuntimeError(
+                    f"Codex CLI failed on attempt {attempt}/{self.retry_count}: {failure}"
+                )
+
+        raise AssertionError("Codex retry loop exited unexpectedly")
+
+    def chat_stream(
+        self,
+        messages: List[Message],
+        temperature: float = 0.0,
+    ) -> Iterator[str]:
+        """Yield the final response as one chunk.
+
+        CUTracer uses one-shot reasoning today. A future consumer that needs
+        progress events can add ``codex exec --json`` parsing without changing
+        the synchronous ``chat`` contract.
+        """
+        yield self.chat(messages, temperature).content
+
+    def _run_once(
+        self, system_prompt: str, user_prompt: str
+    ) -> Tuple["subprocess.CompletedProcess[Any]", str]:
+        output_fd, output_path = tempfile.mkstemp(
+            suffix=".md", prefix="codex_last_message_"
+        )
+        os.close(output_fd)
+        try:
+            result = TrustedSubprocessWithList.run(
+                executable="codex",
+                cmd_args=self._build_args(system_prompt, output_path),
+                input=user_prompt,
+                capture_output=True,
+                text=True,
+                timeout=self.timeout,
+                cwd=self.cwd,
+                check=False,
+            )
+            content = Path(output_path).read_text(encoding="utf-8").strip()
+            return result, content
+        finally:
+            try:
+                os.unlink(output_path)
+            except FileNotFoundError:
+                pass
+
+    def _build_args(self, system_prompt: str, output_path: str) -> List[str]:
+        args = [
+            "-c",
+            'approval_policy="never"',
+            "-c",
+            'web_search="disabled"',
+            "-s",
+            "read-only",
+            "--disable",
+            "hooks",
+            "--disable",
+            "multi_agent",
+        ]
+        if system_prompt:
+            args.extend(
+                [
+                    "-c",
+                    f"developer_instructions={json.dumps(system_prompt, ensure_ascii=False)}",
+                ]
+            )
+        if self.cwd:
+            args.extend(["-C", self.cwd])
+        if self.model:
+            args.extend(["-m", self.model])
+        args.extend(
+            [
+                "exec",
+                "--skip-git-repo-check",
+                "--ephemeral",
+                "--ignore-user-config",
+                "--color",
+                "never",
+                "--output-last-message",
+                output_path,
+                "-",
+            ]
+        )
+        return args
+
+    @staticmethod
+    def _is_transient_failure(failure: str) -> bool:
+        normalized = failure.lower()
+        return any(marker in normalized for marker in _CODEX_TRANSIENT_FAILURE_MARKERS)
+
+
+class MuseClient(LLMClient):
+    """LLM client using the Muse CLI's non-interactive ``exec`` mode.
+
+    The client is one-shot: each :meth:`chat` call runs a single ``muse exec``
+    turn and captures the final agent message from the ``--json`` event stream
+    on stdout. The system message (if any) is prepended to the user message in
+    a prompt file, because ``muse exec`` has no ``--system-prompt`` flag.
+
+    Attributes:
+        retry_count: Number of attempts on failure. Failures are currently
+            fail-fast (no transient markers known yet); the loop exists so a
+            future transient-failure classification can retry without changing
+            the constructor contract.
+        timeout: Timeout in seconds for CLI calls.
+        model: Model id, or None to let the Muse CLI use its default.
+        cwd: Working directory for CLI execution (also passed as --workspace
+            so agent tools stay rooted there).
+        approval_mode: Tool approval mode for headless runs
+            ("untrusted", "on-request", or "never").
+    """
+
+    _APPROVAL_MODES: Tuple[str, ...] = ("untrusted", "on-request", "never")
+
+    def __init__(
+        self,
+        retry_count: int = 3,
+        timeout: int = 600,
+        model: Optional[str] = None,
+        cwd: Optional[str] = None,
+        approval_mode: str = "never",
+    ) -> None:
+        """Initialize MuseClient.
+
+        Args:
+            retry_count: Number of attempts on failure. Currently fail-fast
+                (no transient markers known yet); retries will activate once
+                a transient-failure classifier exists.
+            timeout: Timeout in seconds (default: 600 = 10 minutes).
+            model: Model id, or None to let the Muse CLI use its default.
+            cwd: Working directory for running in external repos.
+            approval_mode: Tool approval mode. "never" (the default) never
+                prompts, which is required for non-interactive runs.
+        """
+        if retry_count < 1:
+            raise ValueError("retry_count must be at least 1")
+        if approval_mode not in self._APPROVAL_MODES:
+            raise ValueError(
+                f"approval_mode must be one of {self._APPROVAL_MODES}, "
+                f"got {approval_mode!r}"
+            )
+        self.retry_count = retry_count
+        self.timeout = timeout
+        self.model = model
+        self.cwd = os.path.abspath(cwd) if cwd else cwd
+        self.approval_mode = approval_mode
+
+    def chat(
+        self,
+        messages: List[Message],
+        temperature: float = 0.0,
+        max_tokens: Optional[int] = None,
+    ) -> Response:
+        """Run one stateless Muse turn and return its final agent message."""
+        del temperature, max_tokens
+        system_prompt, user_prompt = _extract_single_turn_prompts(messages)
+        prompt = self._build_prompt(system_prompt, user_prompt)
+
+        for attempt in range(1, self.retry_count + 1):
+            try:
+                result = self._run_once(prompt)
+            except subprocess.TimeoutExpired as error:
+                raise RuntimeError(
+                    f"Muse CLI timed out after {self.timeout}s"
+                ) from error
+            except OSError as error:
+                raise RuntimeError(f"Failed to launch Muse CLI: {error}") from error
+
+            if result.returncode == 0:
+                content, session_id, model_id = self._parse_json_events(result.stdout)
+                if not content:
+                    raise RuntimeError("Muse CLI returned no final response")
+                return Response(
+                    content=content,
+                    session_id=session_id,
+                    raw={
+                        "returncode": result.returncode,
+                        "stdout": result.stdout,
+                        "stderr": result.stderr,
+                        "model_id": model_id,
+                    },
+                )
+
+            failure = _format_cli_failure(result.stdout, result.stderr)
+            if attempt == self.retry_count or not self._is_transient_failure(failure):
+                raise RuntimeError(
+                    f"Muse CLI failed on attempt {attempt}/{self.retry_count}: {failure}"
+                )
+
+        raise AssertionError("Muse retry loop exited unexpectedly")
+
+    def chat_stream(
+        self,
+        messages: List[Message],
+        temperature: float = 0.0,
+    ) -> Iterator[str]:
+        """Stream response deltas from ``muse exec --json``.
+
+        A watchdog enforces the overall timeout even mid-stream, and the
+        subprocess is always reaped — including when the caller abandons
+        the iterator early.
+
+        Args:
+            messages: List of messages
+            temperature: Temperature parameter (ignored)
+
+        Yields:
+            Text chunks from ``run.output.delta`` events as they arrive.
+        """
+        del temperature
+        system_prompt, user_prompt = _extract_single_turn_prompts(messages)
+        prompt = self._build_prompt(system_prompt, user_prompt)
+
+        fd, prompt_path = tempfile.mkstemp(suffix=".md", prefix="muse_prompt_")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as prompt_file:
+                prompt_file.write(prompt)
+            try:
+                process = TrustedSubprocessWithList.Popen(
+                    executable="muse",
+                    cmd_args=self._build_args(prompt_path),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
+                    cwd=self.cwd,
+                )
+            except OSError as error:
+                raise RuntimeError(f"Failed to launch Muse CLI: {error}") from error
+
+            # Drain stderr on a thread so a full pipe can never deadlock
+            # the stdout read loop below.
+            stderr_box: List[str] = []
+
+            def _drain_stderr() -> None:
+                try:
+                    if process.stderr is not None:
+                        stderr_box.append(process.stderr.read())
+                except (OSError, ValueError):
+                    pass
+
+            drainer = threading.Thread(target=_drain_stderr, daemon=True)
+            drainer.start()
+
+            # Watchdog: kill the process at the overall deadline, since the
+            # blocking stdout read below cannot honor wait()'s timeout.
+            deadline = time.monotonic() + self.timeout
+            timed_out: List[bool] = []
+
+            def _on_deadline() -> None:
+                if process.poll() is None:
+                    timed_out.append(True)
+                    process.kill()
+
+            watchdog = threading.Timer(
+                max(0.0, deadline - time.monotonic()), _on_deadline
+            )
+            watchdog.daemon = True
+            watchdog.start()
+
+            terminal_event_seen = False
+            terminal_state: Optional[str] = None
+            terminal_detail = ""
+            try:
+                stdout = process.stdout
+                if stdout is None:
+                    raise RuntimeError("Muse CLI produced no output stream")
+                for line in stdout:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        event = loads(line)
+                    except JSONDecodeError:
+                        continue
+                    if not isinstance(event, dict):
+                        continue
+                    payload_type = event.get("payload_type", "")
+                    payload = event.get("payload") or {}
+                    if payload_type == "run.output.delta":
+                        text = payload.get("text")
+                        if text:
+                            yield text
+                    elif payload_type.startswith("run.terminal."):
+                        terminal_event_seen = True
+                        terminal_state = payload.get("terminal")
+                        terminal_detail = (
+                            payload.get("reason") or payload.get("text") or ""
+                        )
+                process.wait(timeout=max(0.0, deadline - time.monotonic()))
+            except subprocess.TimeoutExpired as error:
+                process.kill()
+                process.wait()
+                raise RuntimeError(
+                    f"Muse CLI timed out after {self.timeout}s"
+                ) from error
+            finally:
+                watchdog.cancel()
+                if process.poll() is None:
+                    # Abandoned iterator or wait() never reached: reap.
+                    process.kill()
+                    process.wait()
+                drainer.join(timeout=10)
+
+            if timed_out:
+                raise RuntimeError(f"Muse CLI timed out after {self.timeout}s")
+            if terminal_event_seen and terminal_state != "completed":
+                raise RuntimeError(
+                    f"Muse run ended with terminal state {terminal_state!r}: "
+                    f"{terminal_detail or 'no detail'}"
+                )
+            if process.returncode != 0:
+                raise RuntimeError(
+                    "Muse CLI failed: " + _format_cli_failure("", "".join(stderr_box))
+                )
+        finally:
+            try:
+                os.unlink(prompt_path)
+            except FileNotFoundError:
+                pass
+
+    def _run_once(self, prompt: str) -> "subprocess.CompletedProcess[Any]":
+        fd, prompt_path = tempfile.mkstemp(suffix=".md", prefix="muse_prompt_")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as prompt_file:
+                prompt_file.write(prompt)
+            return TrustedSubprocessWithList.run(
+                executable="muse",
+                cmd_args=self._build_args(prompt_path),
+                capture_output=True,
+                text=True,
+                timeout=self.timeout,
+                cwd=self.cwd,
+                check=False,
+            )
+        finally:
+            try:
+                os.unlink(prompt_path)
+            except FileNotFoundError:
+                pass
+
+    def _build_args(self, prompt_path: str) -> List[str]:
+        args = [
+            "exec",
+            "--json",
+            "--approval-mode",
+            self.approval_mode,
+            "--no-session-log",
+        ]
+        if self.cwd:
+            args.extend(["--workspace", self.cwd])
+        if self.model:
+            args.extend(["--model", self.model])
+        args.extend(["--prompt-file", prompt_path])
+        return args
+
+    @staticmethod
+    def _parse_json_events(
+        stdout: str,
+    ) -> Tuple[str, Optional[str], Optional[str]]:
+        """Extract the final text, session id, and model id from --json output.
+
+        Prefers the terminal event's text; falls back to concatenated output
+        deltas when no terminal event is present. Blank and non-JSON lines
+        are skipped.
+
+        Returns:
+            Tuple of (content, session_id, model_id). session_id and model_id
+            are None when the corresponding events are absent.
+
+        Raises:
+            RuntimeError: If the run ended in a non-completed terminal state.
+        """
+        deltas: List[str] = []
+        terminal_text = ""
+        terminal_event_seen = False
+        terminal_state: Optional[str] = None
+        terminal_reason: Optional[str] = None
+        session_id: Optional[str] = None
+        model_id: Optional[str] = None
+
+        for line in stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = loads(line)
+            except JSONDecodeError:
+                continue
+            if not isinstance(event, dict):
+                continue
+            payload_type = event.get("payload_type", "")
+            payload = event.get("payload") or {}
+            if payload_type == "run.output.delta":
+                text = payload.get("text")
+                if text:
+                    deltas.append(text)
+            elif payload_type == "run.model.configured":
+                model_id = payload.get("model_id") or model_id
+            elif payload_type.startswith("run.terminal."):
+                terminal_event_seen = True
+                terminal_state = payload.get("terminal")
+                terminal_text = payload.get("text") or ""
+                terminal_reason = payload.get("reason")
+                stream = event.get("stream") or {}
+                session_id = stream.get("id") or session_id
+
+        if terminal_event_seen and terminal_state != "completed":
+            detail = terminal_reason or terminal_text or "no detail"
+            raise RuntimeError(
+                f"Muse run ended with terminal state {terminal_state!r}: {detail}"
+            )
+
+        content = terminal_text or "".join(deltas)
+        return content, session_id, model_id
+
+    @staticmethod
+    def _build_prompt(system_prompt: str, user_prompt: str) -> str:
+        if not system_prompt:
+            return user_prompt
+        return (
+            "# System instructions\n\n"
+            f"{system_prompt}\n\n"
+            "# User request\n\n"
+            f"{user_prompt}"
+        )
+
+    @staticmethod
+    def _is_transient_failure(failure: str) -> bool:
+        del failure
+        # No transient markers known yet; every failure is fail-fast.
+        return False
 
 
 class ClaudeCodeClient(LLMClient):
@@ -466,3 +1044,59 @@ class ClaudeCodeClient(LLMClient):
         except JSONDecodeError:
             # Non-JSON output, return as-is
             return Response(content=stdout.strip())
+
+
+LLM_PROVIDERS: Tuple[str, ...] = ("claude", "codex", "muse")
+
+
+def create_llm_client(
+    provider: str = "claude",
+    *,
+    model: Optional[str] = None,
+    timeout: int = 600,
+    retry_count: int = 3,
+    cwd: Optional[str] = None,
+    allowed_tools: Optional[List[str]] = None,
+) -> LLMClient:
+    """Create an LLM client for the given provider.
+
+    Args:
+        provider: One of "claude", "codex", or "muse".
+        model: Model name or alias, or None to let the CLI auto-select.
+        timeout: Timeout in seconds for CLI calls.
+        retry_count: Number of retry attempts on failure.
+        cwd: Working directory for CLI execution.
+        allowed_tools: Tools the agent may use. Only used by the Claude
+            provider; ignored by the Codex and Muse providers.
+
+    Returns:
+        An LLMClient for the requested provider.
+
+    Raises:
+        ValueError: If the provider is unknown.
+    """
+    if provider == "claude":
+        return ClaudeCodeClient(
+            allowed_tools=allowed_tools,
+            retry_count=retry_count,
+            timeout=timeout,
+            model=model,
+            cwd=cwd,
+        )
+    if provider == "codex":
+        return CodexClient(
+            retry_count=retry_count,
+            timeout=timeout,
+            model=model,
+            cwd=cwd,
+        )
+    if provider == "muse":
+        return MuseClient(
+            retry_count=retry_count,
+            timeout=timeout,
+            model=model,
+            cwd=cwd,
+        )
+    raise ValueError(
+        f"Unknown LLM provider: {provider!r}. Expected one of {LLM_PROVIDERS}"
+    )

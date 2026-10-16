@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import "./App.css";
 import {
   loadLogData,
@@ -12,14 +12,16 @@ import { useIframeMessaging } from "./hooks/useIframeMessaging";
 import CodeView from "./pages/CodeView";
 import FileDiffView from "./pages/FileDiffView";
 import SingleCodeViewer from "./components/SingleCodeViewer";
+import ComparisonFixture from "./components/ComparisonFixture";
+import SingleFixture from "./components/SingleFixture";
 import KernelOverview from "./pages/KernelOverview";
 import IRAnalysis from "./pages/IRAnalysis";
 import DataSourceSelector from "./components/DataSourceSelector";
 import WelcomeScreen from "./components/WelcomeScreen";
 import ExternalLink from "./components/ExternalLink";
-import { mapLanguageToHighlighter } from "./utils/languageUtils";
 import { useFileDiffSession } from "./context/FileDiffSession";
-import { GitHubIcon, BookOpenIcon, ShareIcon } from "./components/icons";
+import { GitHubIcon, BookOpenIcon } from "./components/icons";
+import ShareButton from "./components/ShareButton";
 
 /**
  * Helper function to find a kernel by its hash
@@ -47,6 +49,14 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   // Track active tab (overview or code comparison)
   const [activeTab, setActiveTab] = useState<string>(() => initialView === "file_diff" ? "file_diff" : "overview");
+  // Keep-alive: main tabs that have been mounted at least once stay mounted
+  // and are hidden with display:none instead of unmounting. Mounting and
+  // unmounting the Monaco diff editor and the full-DOM code viewers costs
+  // seconds per switch (measured); hiding is free. Only the initial tab is
+  // mounted eagerly; the rest mount on first visit.
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(
+    () => new Set([initialView === "file_diff" ? "file_diff" : "overview"])
+  );
   // Track which IR file is selected for viewing
   const [selectedIR, setSelectedIR] = useState<string | null>(null);
   // Track which kernel is currently selected
@@ -57,6 +67,20 @@ function App() {
   const [showWelcome, setShowWelcome] = useState<boolean>(() => !initialJsonUrl && initialView !== "file_diff");
   // Track the loaded data source URL
   const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
+  // Stable identity of the currently loaded data source (§4.2.1/R4): set
+  // once per completed load, reused across ordinary rerenders. Shape
+  // `<kind>:<locator>#<loadSeq>` — never derived from the page URL slot, so
+  // two local files, URL->local switches, and repeated URL loads each get a
+  // distinct identity. Only load-completion handlers bump the
+  // sequence; render never mints IDs. The pre-load sentinel "no-source" is
+  // exempt from the shape: nothing parses this string (buildKernelKey only
+  // JSON-wraps it).
+  const [sourceIdentity, setSourceIdentity] = useState<string>("no-source");
+  const loadSeqRef = useRef(0);
+  const nextSourceIdentity = useCallback((kind: string, locator: string) => {
+    loadSeqRef.current += 1;
+    return `${kind}:${locator}#${loadSeqRef.current}`;
+  }, []);
   // Track if URL input is shown
   const [showUrlInput, setShowUrlInput] = useState<boolean>(false);
 
@@ -79,6 +103,7 @@ function App() {
         setDataLoaded(true);
         setShowWelcome(false); // Hide welcome screen when data is loaded
         setLoadedUrl(null); // Data came from iframe, not URL
+        setSourceIdentity(nextSourceIdentity("iframe", "parent-window"));
       } else {
         setError("No kernels found in the received data.");
       }
@@ -89,7 +114,7 @@ function App() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [nextSourceIdentity]);
 
   // Set up iframe messaging for communication with parent window
   useIframeMessaging({
@@ -123,10 +148,13 @@ function App() {
         setActiveTab("comparison");
       } else if (view === "file_diff") {
         setActiveTab("file_diff");
+      } else if (view === "ir_analysis") {
+        setActiveTab("ir_analysis");
       }
       setDataLoaded(true);
       setShowWelcome(false);
       setLoadedUrl(url);
+      setSourceIdentity(nextSourceIdentity("url", url));
 
       const newUrl = new URL(window.location.href);
       newUrl.searchParams.set("json_url", url);
@@ -134,6 +162,8 @@ function App() {
         newUrl.searchParams.set("view", "ir_code_comparison");
       } else if (view === "file_diff") {
         newUrl.searchParams.set("view", "file_diff");
+      } else if (view === "ir_analysis") {
+        newUrl.searchParams.set("view", "ir_analysis");
       }
       if (kernelHash) {
         const foundIndex = findKernelByHash(kernelHash, processedKernels);
@@ -146,7 +176,7 @@ function App() {
       console.warn("No kernels found in the URL data");
       setError("No kernels found in the URL data. Please check the file format.");
     }
-  }, []);
+  }, [nextSourceIdentity]);
 
   /**
    * Handles loading data from a custom URL (user-triggered, wraps with loading/error state)
@@ -191,15 +221,19 @@ function App() {
             setActiveTab("comparison");
           } else if (view === "file_diff") {
             setActiveTab("file_diff");
+          } else if (view === "ir_analysis") {
+            setActiveTab("ir_analysis");
           }
           setDataLoaded(true);
           setShowWelcome(false);
           setLoadedUrl(initialJsonUrl);
+          setSourceIdentity(nextSourceIdentity("url", initialJsonUrl));
 
           const newUrl = new URL(window.location.href);
           newUrl.searchParams.set("json_url", initialJsonUrl);
           if (view === "ir_code_comparison") newUrl.searchParams.set("view", "ir_code_comparison");
           else if (view === "file_diff") newUrl.searchParams.set("view", "file_diff");
+          else if (view === "ir_analysis") newUrl.searchParams.set("view", "ir_analysis");
           if (kernelHash) {
             const fi = findKernelByHash(kernelHash, processedKernels);
             if (fi >= 0) newUrl.searchParams.set("kernel_hash", kernelHash);
@@ -266,10 +300,19 @@ function App() {
           setActiveTab("comparison");
         } else if (view === "file_diff") {
           setActiveTab("file_diff");
+        } else if (view === "ir_analysis") {
+          setActiveTab("ir_analysis");
         }
 
         setDataLoaded(true);
         setShowWelcome(false);
+        // Covers bundled-example URL strings and local File objects; the
+        // page URL slot is intentionally not read here.
+        setSourceIdentity(
+          typeof source === "string"
+            ? nextSourceIdentity("url", source)
+            : nextSourceIdentity("local", source.name)
+        );
       } else {
         console.warn("No kernels found in the processed data");
         const errorMsg = typeof source === 'string'
@@ -289,11 +332,13 @@ function App() {
   };
 
   /**
-   * Loads the default data file from public directory
+   * Loads one of the bundled example traces from the public directory.
+   *
+   * Filenames are fixed by `tritonparse.tools.generate_examples`, which keeps
+   * the trace-log naming convention the parser requires; see BUNDLED_EXAMPLES.
    */
-  const loadDefaultData = async () => {
-    const logFile = "./dedicated_log_triton_trace_findhao__mapped.ndjson.gz";
-    await loadData(logFile);
+  const loadBundledExample = async (fileName: string) => {
+    await loadData(`./${fileName}`);
   };
 
   /**
@@ -346,6 +391,31 @@ function App() {
     }
   };
 
+  /**
+   * Builds the shareable URL for the current single-trace view at click time.
+   */
+  const buildSingleTraceShareUrl = useCallback(() => {
+    const shareableUrl = new URL(window.location.href);
+
+    // Add or remove view parameter
+    if (activeTab === "comparison") {
+      shareableUrl.searchParams.set("view", "ir_code_comparison");
+    } else if (activeTab === "ir_analysis") {
+      shareableUrl.searchParams.set("view", "ir_analysis");
+    } else {
+      shareableUrl.searchParams.delete("view");
+    }
+
+    // Add or remove kernel_hash parameter
+    if (selectedKernel >= 0 && kernels[selectedKernel]?.metadata?.hash) {
+      shareableUrl.searchParams.set("kernel_hash", kernels[selectedKernel].metadata.hash);
+    } else {
+      shareableUrl.searchParams.delete("kernel_hash");
+    }
+
+    return shareableUrl.toString();
+  }, [activeTab, selectedKernel, kernels]);
+
   // Register app controls for FileDiffSession navigation
   useEffect(() => {
     sess.registerAppControls({
@@ -359,6 +429,32 @@ function App() {
       sess.clearPreview();
     }
   }, [activeTab, sess]);
+
+  // Keep-alive bookkeeping: remember main tabs once visited so they stay
+  // mounted while hidden. Transient states (single-IR, preview, welcome)
+  // keep their exclusive rendering and are unaffected. React's documented
+  // "adjust state during render" pattern (also used in FileDiffView and
+  // TruncatedValue); the guard makes it fire at most once per new tab.
+  if (
+    (activeTab === "overview" || activeTab === "comparison" || activeTab === "file_diff" || activeTab === "ir_analysis") &&
+    !visitedTabs.has(activeTab)
+  ) {
+    setVisitedTabs(new Set(visitedTabs).add(activeTab));
+  }
+
+  // Committed e2e fixture page: mounts the real comparison V2
+  // with synthetic props and swap buttons. Only reachable through the
+  // explicit ?view=comparison_fixture URL; normal flows never render it.
+  if (initialParams.get("view") === "comparison_fixture") {
+    return <ComparisonFixture />;
+  }
+
+  // Committed e2e fixture page: mounts the real Single
+  // viewer with synthetic props and swap buttons. Only reachable through
+  // the explicit ?view=single_fixture URL; normal flows never render it.
+  if (initialParams.get("view") === "single_fixture") {
+    return <SingleFixture />;
+  }
 
   // Show loading indicator while data is being fetched
   if (loading) {
@@ -401,9 +497,10 @@ function App() {
         <SingleCodeViewer
           irFile={irFile}
           title={selectedIR}
-          language={mapLanguageToHighlighter(selectedIR, kernel?.ir_stages)}
           onBack={handleBackFromIRView}
           irStages={kernel?.ir_stages}
+          sourceId={sourceIdentity}
+          kernelId={kernel.metadata?.hash ?? selectedKernel}
         />
       );
     } else if (sess.preview.active) {
@@ -447,7 +544,7 @@ function App() {
       }
       return (
         <WelcomeScreen
-          loadDefaultData={loadDefaultData}
+          loadBundledExample={loadBundledExample}
           handleFileSelected={handleFileSelected}
           openUrlInput={openUrlInput}
         />
@@ -456,7 +553,7 @@ function App() {
       // Show welcome screen when user clicks title to go home (even when data is loaded)
       return (
         <WelcomeScreen
-          loadDefaultData={loadDefaultData}
+          loadBundledExample={loadBundledExample}
           handleFileSelected={handleFileSelected}
           openUrlInput={openUrlInput}
         />
@@ -475,44 +572,53 @@ function App() {
         </div>
       );
     } else {
-      // Show either overview, IR code, IR analysis, or file diff based on active tab
-      if (activeTab === "overview") {
-        return (
-          <KernelOverview
-            kernels={kernels}
-            onViewIR={handleViewSingleIR}
-            selectedKernel={selectedKernel}
-            onSelectKernel={handleSelectKernel}
-          />
-        );
-      }
-      if (activeTab === "ir_analysis") {
-        return (
-          <IRAnalysis
-            kernels={kernels}
-            selectedKernel={selectedKernel}
-          />
-        );
-      }
-      if (activeTab === "comparison") {
-        return (
-          <CodeView
-            key={`codeview-main-${selectedKernel}`}
-            kernels={kernels}
-            selectedKernel={selectedKernel}
-          />
-        );
-      }
-      if (activeTab === "file_diff") {
-        return (
-          <FileDiffView
-            kernelsLeft={kernels}
-            selectedLeftIndex={Math.max(0, selectedKernel)}
-            leftLoadedUrl={loadedUrl}
-          />
-        );
-      }
-      return null;
+      // Show either overview, IR code, IR analysis, or file diff based on active tab.
+      // Visited tabs stay mounted and inactive ones are hidden with display:none,
+      // so switching tabs never pays unmount/remount (measured in seconds for
+      // the Monaco diff editor and the full-DOM code viewers). Unvisited tabs
+      // render nothing until first visit.
+      const show = (tab: string) => (activeTab === tab ? undefined : "none");
+      return (
+        <>
+          {visitedTabs.has("overview") && (
+            <div style={{ display: show("overview") }}>
+              <KernelOverview
+                kernels={kernels}
+                onViewIR={handleViewSingleIR}
+                selectedKernel={selectedKernel}
+                onSelectKernel={handleSelectKernel}
+              />
+            </div>
+          )}
+          {visitedTabs.has("ir_analysis") && (
+            <div style={{ display: show("ir_analysis") }}>
+              <IRAnalysis
+                kernels={kernels}
+                selectedKernel={selectedKernel}
+              />
+            </div>
+          )}
+          {visitedTabs.has("comparison") && (
+            <div style={{ display: show("comparison") }}>
+              <CodeView
+                key={`codeview-main-${selectedKernel}`}
+                kernels={kernels}
+                selectedKernel={selectedKernel}
+                sourceId={sourceIdentity}
+              />
+            </div>
+          )}
+          {visitedTabs.has("file_diff") && (
+            <div style={{ display: show("file_diff") }}>
+              <FileDiffView
+                kernelsLeft={kernels}
+                selectedLeftIndex={Math.max(0, selectedKernel)}
+                leftLoadedUrl={loadedUrl}
+              />
+            </div>
+          )}
+        </>
+      );
     }
   };
 
@@ -723,42 +829,16 @@ function App() {
         {/* Show error message if data loading failed */}
         {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">{error}</div>}
 
-        {/* Show loaded URL if available */}
-        {loadedUrl && dataLoaded && (
+        {/* Show loaded URL if available (File Diff owns its own Share button) */}
+        {loadedUrl && dataLoaded && activeTab !== "file_diff" && (
           <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded mb-6 flex items-center justify-between">
             <div>
               <span className="font-medium">Loaded from: </span>
               <span className="break-all">{loadedUrl}</span>
             </div>
-            <button
-              onClick={() => {
-                // Create a shareable URL with the current json_url
-                const shareableUrl = new URL(window.location.href);
-
-                // Add or remove view parameter
-                if (activeTab === "comparison") {
-                  shareableUrl.searchParams.set("view", "ir_code_comparison");
-                } else {
-                  shareableUrl.searchParams.delete("view");
-                }
-
-                // Add or remove kernel_hash parameter
-                if (selectedKernel >= 0 && kernels[selectedKernel]?.metadata?.hash) {
-                  shareableUrl.searchParams.set("kernel_hash", kernels[selectedKernel].metadata.hash);
-                } else {
-                  shareableUrl.searchParams.delete("kernel_hash");
-                }
-
-                navigator.clipboard
-                  .writeText(shareableUrl.toString())
-                  .then(() => alert("Shareable link copied to clipboard!"))
-                  .catch((err) => console.error("Failed to copy link:", err));
-              }}
-              className="ml-4 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm flex items-center"
-            >
-              <ShareIcon className="h-4 w-4 mr-1" />
-              Share
-            </button>
+            <span className="ml-4">
+              <ShareButton getShareUrl={buildSingleTraceShareUrl} />
+            </span>
           </div>
         )}
 

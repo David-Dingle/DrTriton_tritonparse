@@ -1,9 +1,7 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { ProcessedKernel, getIRType, getDefaultPanels, IRStageDescriptor } from "../utils/dataLoader";
-import CodeComparisonView from "../components/CodeComparisonView";
-import type { LineAnnotation } from "../components/CodeViewer";
+import CodeComparisonViewV2 from "../components/CodeComparisonViewV2";
 import { getDisplayLanguage } from "../utils/irLanguage";
-import { mapLanguageToHighlighter } from "../utils/languageUtils";
 import { ArrowsRightLeftIcon } from "../components/icons";
 
 /**
@@ -12,6 +10,8 @@ import { ArrowsRightLeftIcon } from "../components/icons";
 interface CodeViewProps {
   kernels: ProcessedKernel[]; // Array of processed kernel data
   selectedKernel?: number; // Index of the currently selected kernel
+  /** Actual load-source identity; main path passes App state. */
+  sourceId?: string;
 }
 
 /**
@@ -41,7 +41,8 @@ const CodeViewInner: React.FC<{
   irFiles: string[];
   defaultIRFiles: { left: string; right: string };
   selectedKernel: number;
-}> = ({ kernel, irFiles, defaultIRFiles, selectedKernel }) => {
+  sourceId?: string;
+}> = ({ kernel, irFiles, defaultIRFiles, selectedKernel, sourceId }) => {
   // States to track selected IR files for left and right panels
   // Initialize with defaults - component remounts when kernel changes
   const [leftIR, setLeftIR] = useState<string>(defaultIRFiles.left);
@@ -50,52 +51,63 @@ const CodeViewInner: React.FC<{
   // State to track if Python source code should be shown
   const [showPythonSource, setShowPythonSource] = useState<boolean>(true);
 
+  // Word wrap for all three panels (same `wrap` URL param as File Diff).
+  const [wordWrap, setWordWrap] = useState<"off" | "on">(() => {
+    const w = new URLSearchParams(window.location.search).get("wrap");
+    return w === "on" ? "on" : "off";
+  });
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    // Preserve existing history.state (a router may own it) and skip the
+    // write when the URL already reflects the value (absent == "off"), so
+    // mounting never rewrites a URL the user didn't touch.
+    const current = url.searchParams.get("wrap") ?? "off";
+    if (current === wordWrap) return;
+    url.searchParams.set("wrap", wordWrap);
+    window.history.replaceState(window.history.state, "", url.toString());
+  }, [wordWrap]);
+
   const hasPythonSource = !!kernel?.pythonSourceInfo?.code;
 
-  // DrTriton redundancy overlay: load BOTH annotation files once and merge them,
-  // keyed by file basename. redundancy_annotations.json is emitted by
-  // computing_redundancy_to_tritonparse.py; access_annotations.json by
-  // access_redundancy_to_tritonparse.py. Either may be absent (feature off).
-  const [redundancyAnn, setRedundancyAnn] = useState<
-    Record<string, Record<string, LineAnnotation>>
-  >({});
-  useEffect(() => {
-    const base = import.meta.env.BASE_URL;
-    const grab = (name: string) =>
-      fetch(`${base}${name}`)
-        .then((r) => (r.ok ? r.json() : {}))
-        .catch(() => ({}));
-    Promise.all([
-      grab("redundancy_annotations.json"),
-      grab("access_annotations.json"),
-    ]).then(([comp, acc]) => {
-      const merged: Record<string, Record<string, LineAnnotation>> = {};
-      for (const src of [comp, acc]) {
-        for (const file of Object.keys(src || {})) {
-          merged[file] = { ...(merged[file] || {}), ...src[file] };
-        }
-      }
-      setRedundancyAnn(merged);
-    });
-  }, []);
-
-  // annotations for THIS kernel's Python file (match by basename), keyed by absolute line
-  const pyAnnotations = useMemo<Record<number, LineAnnotation>>(() => {
-    const fp = kernel?.pythonSourceInfo?.file_path;
-    if (!fp) return {};
-    const base = fp.split("/").pop() as string;
-    const byLine = redundancyAnn[base];
-    if (!byLine) return {};
-    const out: Record<number, LineAnnotation> = {};
-    for (const k of Object.keys(byLine)) out[Number(k)] = byLine[k];
-    return out;
-  }, [kernel, redundancyAnn]);
+  // Memoized panel descriptors: CodeComparisonViewV2 is memo'd, so these
+  // must keep referential identity across unrelated parent renders (e.g.
+  // tab switches). Fresh object literals here re-rendered all viewers and
+  // re-tokenized every row (~6s measured) on each switch.
+  const leftPanel = useMemo(() => ({
+    code: {
+      content: kernel.irFiles[leftIR],
+      source_mapping: kernel.sourceMappings?.[getIRType(leftIR)] || {}
+    },
+    title: leftIR
+  }), [kernel, leftIR]);
+  const rightPanel = useMemo(() => ({
+    code: {
+      content: kernel.irFiles[rightIR],
+      source_mapping: kernel.sourceMappings?.[getIRType(rightIR)] || {}
+    },
+    title: rightIR
+  }), [kernel, rightIR]);
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-gray-800 mb-4">
-        Code Comparison: [{selectedKernel}] {kernel.name}
-      </h1>
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold text-gray-800">
+          Code Comparison: [{selectedKernel}] {kernel.name}
+        </h1>
+        <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+          Wrap:
+          <select
+            data-testid="comparison-wrap-select"
+            value={wordWrap}
+            onChange={(e) => setWordWrap(e.target.value as "off" | "on")}
+            className="border border-gray-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            aria-label="Word wrap"
+          >
+            <option value="off">Off</option>
+            <option value="on">On</option>
+          </select>
+        </label>
+      </div>
 
       {/* IR file selector controls */}
       <div className="flex justify-between items-center mb-6 relative">
@@ -201,28 +213,24 @@ const CodeViewInner: React.FC<{
       {/* Side-by-side comparison of selected IR files */}
       {leftIR && rightIR ? (
         <div className="h-[calc(100vh-20rem)] bg-white rounded-lg overflow-auto resize-y min-h-48 shadow-sm border border-gray-200">
-          <CodeComparisonView
-            leftPanel={{
-              code: {
-                content: kernel.irFiles[leftIR],
-                source_mapping: kernel.sourceMappings?.[getIRType(leftIR)] || {}
-              },
-              language: mapLanguageToHighlighter(leftIR, kernel?.ir_stages),
-              title: leftIR
-            }}
-            rightPanel={{
-              code: {
-                content: kernel.irFiles[rightIR],
-                source_mapping: kernel.sourceMappings?.[getIRType(rightIR)] || {}
-              },
-              language: mapLanguageToHighlighter(rightIR, kernel?.ir_stages),
-              title: rightIR
-            }}
+          <CodeComparisonViewV2
+            leftPanel={leftPanel}
+            rightPanel={rightPanel}
             py_code_info={kernel.pythonSourceInfo}
             showPythonSource={showPythonSource && hasPythonSource}
-            pythonMapping={kernel.sourceMappings?.["python"] || {}}
+            pythonMapping={kernel.sourceMappings?.["python"]}
             irStages={kernel.ir_stages}
-            pythonAnnotations={pyAnnotations}
+            // Main path passes the actual load-source identity; the File
+            // Diff preview call site passes nothing and falls back to the
+            // page-param derivation (preview data comes from the File Diff
+            // session, not the main load).
+            sourceId={
+              sourceId ??
+              new URLSearchParams(window.location.search).get("json_url") ??
+              "local-data"
+            }
+            kernelId={kernel.metadata?.hash ?? selectedKernel}
+            wordWrap={wordWrap}
           />
         </div>
       ) : (
@@ -238,7 +246,7 @@ const CodeViewInner: React.FC<{
  * CodeView component that shows a side-by-side comparison of different IR files
  * from the same kernel (typically TTGIR and PTX)
  */
-const CodeView: React.FC<CodeViewProps> = ({ kernels, selectedKernel = 0 }) => {
+const CodeView: React.FC<CodeViewProps> = ({ kernels, selectedKernel = 0, sourceId }) => {
   // Compute derived values (may be undefined if no valid kernel)
   const kernel = kernels && kernels.length > 0 && selectedKernel >= 0
     ? kernels[selectedKernel]
@@ -292,6 +300,7 @@ const CodeView: React.FC<CodeViewProps> = ({ kernels, selectedKernel = 0 }) => {
       irFiles={irFiles}
       defaultIRFiles={defaultIRFiles}
       selectedKernel={selectedKernel}
+      sourceId={sourceId}
     />
   );
 };

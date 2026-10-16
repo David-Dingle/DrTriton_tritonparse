@@ -82,22 +82,13 @@ function processInlineFonts(css) {
   });
 }
 
-// Replace script tags with inline scripts
-html = html.replace(scriptRegex, (match, src) => {
-  const scriptPath = getFilePath(src);
-  if (fs.existsSync(scriptPath)) {
-    try {
-      const scriptContent = fs.readFileSync(scriptPath, 'utf8');
-      // Preserve type="module" attribute if it exists
-      const typeModule = match.includes('type="module"') ? ' type="module"' : '';
-      const crossOrigin = match.includes('crossorigin') ? ' crossorigin' : '';
-      return `<script${typeModule}${crossOrigin}>${scriptContent}</script>`;
-    } catch (err) {
-      console.warn(`Warning: Could not inline script ${scriptPath}. Error: ${err.message}`);
-    }
-  }
-  return match;
-});
+// Inlining order is load-bearing. The style/favicon/img/svg replacements
+// below use broad regexes that could match bundle bytes (e.g. an <img>
+// string inside JS), so they run FIRST, while `html` is still the original
+// index.html; the CSS font injection inside the style step only rewrites
+// @font-face rules, never script bytes. Scripts are inlined next and
+// integrity-checked immediately; any later step that rewrites script bytes
+// by design must run after the check.
 
 // Replace link tags with inline styles, and process any font references within CSS
 html = html.replace(styleRegex, (match, href) => {
@@ -155,6 +146,85 @@ html = html.replace(svgRegex, (match, href) => {
   }
   return match;
 });
+
+// Replace script tags with inline scripts. Inlined bundles are collected and
+// re-inserted before </body>: `defer` is ignored on src-less inline scripts,
+// so a bundle left in <head> would run before <div id="root"> is parsed
+// (React createRoot on null). End-of-body placement preserves the original
+// deferred timing for classic scripts; inline modules defer implicitly.
+const inlinedScripts = [];
+// Build-time inliner: input is trusted Vite-generated dist/index.html, so unmatched <script> spellings are not attacker-controlled.
+html = html.replace(scriptRegex, (match, src) => { // lgtm[js/incomplete-multi-character-sanitization]
+  const scriptPath = getFilePath(src);
+  if (fs.existsSync(scriptPath)) {
+    try {
+      const scriptContent = fs.readFileSync(scriptPath, 'utf8');
+      // Preserve type="module" attribute if it exists
+      const typeModule = match.includes('type="module"') ? ' type="module"' : '';
+      const crossOrigin = match.includes('crossorigin') ? ' crossorigin' : '';
+      inlinedScripts.push(`<script${typeModule}${crossOrigin}>${scriptContent}</script>`);
+      return '';
+    } catch (err) {
+      console.warn(`Warning: Could not inline script ${scriptPath}. Error: ${err.message}`);
+    }
+  }
+  return match;
+});
+if (inlinedScripts.length > 0) {
+  const combined = inlinedScripts.join('\n');
+  if (!html.includes('</body>')) {
+    console.warn('Warning: no </body> tag; appending inlined scripts before </html> or at end of document.');
+  }
+  // Replacer function, NOT a replacement string: bundle bytes contain `$`
+  // sequences (`$$`, `$&`, ... ) that String.replace would substitute.
+  html = html.includes('</body>')
+    ? html.replace('</body>', () => `${combined}\n</body>`)
+    : html.includes('</html>')
+      ? html.replace('</html>', () => `${combined}\n</html>`)
+      : html + combined;
+}
+
+// Integrity self-check: every inlined script must survive byte-identical.
+// A corrupt insertion (e.g. `$`-pattern substitution) fails the build here
+// instead of shipping a standalone page that throws a SyntaxError.
+for (const script of inlinedScripts) {
+  if (!html.includes(script)) {
+    console.error('Error: inlined script bytes do not match the output HTML; aborting.');
+    process.exit(1);
+  }
+}
+
+// Inline font assets referenced from the inlined JS (I005). Vite emits e.g.
+// assets/codicon-<hash>.ttf and references it from JS-injected CSS via
+// new URL(`codicon-<hash>.ttf`, document.currentScript...src||baseURI).
+// The moved standalone.html has no adjacent assets, so each referenced font
+// basename is replaced with its data URI (split/join: no `$` substitution).
+// Any leftover reference fails the build — it would 404 in delivery.
+const FONT_EXTENSIONS = new Set(['.ttf', '.woff', '.woff2', '.otf', '.eot']);
+const FONT_MIME_TYPES = { '.ttf': 'font/ttf', '.woff': 'font/woff', '.woff2': 'font/woff2', '.otf': 'font/otf', '.eot': 'application/vnd.ms-fontobject' };
+const assetsDir = path.join(distDir, 'assets');
+// Skip-if-missing like every other inliner step (style/favicon/img all
+// guard before reading): an unguarded readdirSync would throw ENOENT.
+const assetEntries = fs.existsSync(assetsDir) ? fs.readdirSync(assetsDir, { withFileTypes: true }) : [];
+for (const entry of assetEntries) {
+  if (!entry.isFile() || !FONT_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) continue;
+  const fontPath = path.join(assetsDir, entry.name);
+  const occurrences = html.split(entry.name).length - 1;
+  if (occurrences === 0) continue;
+  const dataUri = toDataURI(fontPath, FONT_MIME_TYPES[path.extname(entry.name).toLowerCase()]);
+  // A null read must abort like every other inliner failure: without this
+  // guard join() would inject the literal string "null" into the bundle.
+  if (!dataUri) {
+    console.error(`Error: could not read font asset ${entry.name}; aborting.`);
+    process.exit(1);
+  }
+  html = html.split(entry.name).join(dataUri);
+  console.log(`Inlined font asset ${entry.name} (${occurrences} reference(s)) as data URI.`);
+  if (html.includes(entry.name)) {
+    console.error(`Error: font reference ${entry.name} survives inlining; aborting.`);
+    process.exit(1);
+  }
+}
 
 // Write the result to a new HTML file
 fs.writeFileSync(outputFile, html);

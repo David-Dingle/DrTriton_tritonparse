@@ -2,14 +2,21 @@
 
 """Tests for AI module client classes."""
 
+import json
+import os
+import subprocess
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from tritonparse.ai import (
     ClaudeCodeClient,
+    CodexClient,
+    create_llm_client,
     LLMClient,
     Message,
     MockClient,
+    MuseClient,
     Response,
     ToolCall,
 )
@@ -165,6 +172,636 @@ class TestMockClient(unittest.TestCase):
         client = MockClient(responses=["A", "B"])
         list(client.chat_stream([]))  # Consume the iterator
         self.assertEqual(client.call_count, 1)
+
+
+class TestCodexClient(unittest.TestCase):
+    """Tests for the read-only Codex CLI client."""
+
+    @staticmethod
+    def _write_final_message(cmd_args, content="Codex result"):
+        output_index = cmd_args.index("--output-last-message") + 1
+        output_path = Path(cmd_args[output_index])
+        output_path.write_text(content, encoding="utf-8")
+        return output_path
+
+    def test_init_default_values(self):
+        client = CodexClient()
+        self.assertIsNone(client.model)
+        self.assertEqual(client.retry_count, 3)
+        self.assertEqual(client.timeout, 600)
+        self.assertIsNone(client.cwd)
+
+    def test_rejects_zero_retry_count(self):
+        with self.assertRaisesRegex(ValueError, "retry_count"):
+            CodexClient(retry_count=0)
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_uses_safe_read_only_command(self, mock_run):
+        output_paths = []
+
+        def run_codex(**kwargs):
+            output_paths.append(self._write_final_message(kwargs["cmd_args"]))
+            return subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="progress", stderr=""
+            )
+
+        mock_run.side_effect = run_codex
+        model = 'gpt-test"; touch /tmp/not-run'
+        client = CodexClient(
+            retry_count=2,
+            timeout=42,
+            model=model,
+            cwd="/tmp/trace dir",
+        )
+
+        response = client.chat(
+            [
+                Message(role="system", content="System\ninstructions 😀"),
+                Message(role="user", content="Analyze this trace"),
+            ]
+        )
+
+        self.assertEqual(response.content, "Codex result")
+        mock_run.assert_called_once()
+        kwargs = mock_run.call_args.kwargs
+        self.assertEqual(kwargs["executable"], "codex")
+        self.assertEqual(kwargs["input"], "Analyze this trace")
+        self.assertEqual(kwargs["timeout"], 42)
+        self.assertEqual(kwargs["cwd"], "/tmp/trace dir")
+        self.assertTrue(kwargs["capture_output"])
+        self.assertTrue(kwargs["text"])
+        self.assertFalse(kwargs["check"])
+
+        args = kwargs["cmd_args"]
+        self.assertIn('approval_policy="never"', args)
+        self.assertIn('web_search="disabled"', args)
+        self.assertIn("read-only", args)
+        self.assertIn("hooks", args)
+        self.assertIn("multi_agent", args)
+        self.assertIn("--skip-git-repo-check", args)
+        self.assertIn("--ephemeral", args)
+        self.assertIn("--ignore-user-config", args)
+        self.assertIn("never", args)
+        self.assertIn(model, args)
+        self.assertEqual(args[-1], "-")
+        self.assertNotIn("--dangerously-bypass-approvals-and-sandbox", args)
+        self.assertNotIn("--search", args)
+
+        developer_config = next(
+            arg for arg in args if arg.startswith("developer_instructions=")
+        )
+        self.assertIn("😀", developer_config)
+        self.assertEqual(
+            json.loads(developer_config.removeprefix("developer_instructions=")),
+            "System\ninstructions 😀",
+        )
+        self.assertEqual(len(output_paths), 1)
+        self.assertFalse(output_paths[0].exists())
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_rejects_unsupported_message_shapes(self, mock_run):
+        invalid_messages = [
+            [],
+            [Message(role="system", content="System")],
+            [
+                Message(role="user", content="First"),
+                Message(role="user", content="Second"),
+            ],
+            [
+                Message(role="system", content="First"),
+                Message(role="system", content="Second"),
+                Message(role="user", content="Analyze"),
+            ],
+            [
+                Message(role="assistant", content="Prior response"),
+                Message(role="user", content="Analyze"),
+            ],
+            [
+                Message(role="tool", content="Tool result"),
+                Message(role="user", content="Analyze"),
+            ],
+        ]
+
+        for messages in invalid_messages:
+            with self.subTest(messages=messages):
+                with self.assertRaisesRegex(ValueError, "exactly one user message"):
+                    CodexClient().chat(messages)
+
+        mock_run.assert_not_called()
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_resolves_relative_cwd(self, mock_run):
+        def run_codex(**kwargs):
+            self._write_final_message(kwargs["cmd_args"])
+            return subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="", stderr=""
+            )
+
+        mock_run.side_effect = run_codex
+        expected_cwd = os.path.abspath("relative/trace/dir")
+
+        CodexClient(cwd="relative/trace/dir").chat(
+            [Message(role="user", content="Analyze")]
+        )
+
+        kwargs = mock_run.call_args.kwargs
+        self.assertEqual(kwargs["cwd"], expected_cwd)
+        args = kwargs["cmd_args"]
+        cwd_index = args.index("-C") + 1
+        self.assertEqual(args[cwd_index], expected_cwd)
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_retries_transient_capacity_failure(self, mock_run):
+        attempts = 0
+
+        def run_codex(**kwargs):
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                return subprocess.CompletedProcess(
+                    args=[], returncode=1, stdout="", stderr="no_capacity"
+                )
+            self._write_final_message(kwargs["cmd_args"], "Recovered")
+            return subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="", stderr=""
+            )
+
+        mock_run.side_effect = run_codex
+        response = CodexClient(retry_count=2).chat(
+            [Message(role="user", content="Analyze")]
+        )
+
+        self.assertEqual(response.content, "Recovered")
+        self.assertEqual(mock_run.call_count, 2)
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_does_not_retry_deterministic_failure(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=2, stdout="", stderr="invalid model"
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "invalid model"):
+            CodexClient(retry_count=3).chat([Message(role="user", content="Analyze")])
+
+        mock_run.assert_called_once()
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_cleans_output_file_after_timeout(self, mock_run):
+        output_paths = []
+
+        def time_out(**kwargs):
+            args = kwargs["cmd_args"]
+            output_index = args.index("--output-last-message") + 1
+            output_paths.append(Path(args[output_index]))
+            raise subprocess.TimeoutExpired(cmd="codex", timeout=10)
+
+        mock_run.side_effect = time_out
+
+        with self.assertRaisesRegex(RuntimeError, "timed out after 10s"):
+            CodexClient(timeout=10).chat([Message(role="user", content="Analyze")])
+
+        self.assertEqual(len(output_paths), 1)
+        self.assertFalse(output_paths[0].exists())
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_rejects_empty_final_response(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="", stderr=""
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "no final response"):
+            CodexClient().chat([Message(role="user", content="Analyze")])
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_stream_yields_final_response(self, mock_run):
+        def run_codex(**kwargs):
+            self._write_final_message(kwargs["cmd_args"], "Stream result")
+            return subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="", stderr=""
+            )
+
+        mock_run.side_effect = run_codex
+
+        chunks = list(
+            CodexClient().chat_stream([Message(role="user", content="Analyze")])
+        )
+
+        self.assertEqual(chunks, ["Stream result"])
+
+
+class TestMuseClient(unittest.TestCase):
+    """Tests for the one-shot Muse CLI client."""
+
+    @staticmethod
+    def _prompt_path(cmd_args):
+        prompt_index = cmd_args.index("--prompt-file") + 1
+        return Path(cmd_args[prompt_index])
+
+    @staticmethod
+    def _json_stdout(
+        text="Muse result",
+        session_id="session-1",
+        model_id="muse-test-model",
+        terminal="completed",
+    ):
+        events = [
+            {
+                "payload_type": "run.model.configured",
+                "payload": {"model_id": model_id},
+            },
+            {"payload_type": "run.output.delta", "payload": {"text": text}},
+            {
+                "payload_type": f"run.terminal.{terminal}",
+                "stream": {"kind": "session", "id": session_id},
+                "payload": {"terminal": terminal, "text": text, "reason": None},
+            },
+        ]
+        return "\n".join(json.dumps(event) for event in events)
+
+    def test_init_default_values(self):
+        client = MuseClient()
+        self.assertIsNone(client.model)
+        self.assertEqual(client.retry_count, 3)
+        self.assertEqual(client.timeout, 600)
+        self.assertIsNone(client.cwd)
+        self.assertEqual(client.approval_mode, "never")
+
+    def test_rejects_zero_retry_count(self):
+        with self.assertRaisesRegex(ValueError, "retry_count"):
+            MuseClient(retry_count=0)
+
+    def test_rejects_invalid_approval_mode(self):
+        with self.assertRaisesRegex(ValueError, "approval_mode"):
+            MuseClient(approval_mode="always")
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_uses_headless_exec_command(self, mock_run):
+        seen_prompts = []
+        prompt_paths = []
+
+        def run_muse(**kwargs):
+            prompt_path = self._prompt_path(kwargs["cmd_args"])
+            prompt_paths.append(prompt_path)
+            seen_prompts.append(prompt_path.read_text(encoding="utf-8"))
+            return subprocess.CompletedProcess(
+                args=[], returncode=0, stdout=self._json_stdout(), stderr=""
+            )
+
+        mock_run.side_effect = run_muse
+        model = 'muse-test"; touch /tmp/not-run'
+        client = MuseClient(
+            retry_count=2,
+            timeout=42,
+            model=model,
+            cwd="/tmp/trace dir",
+        )
+
+        response = client.chat(
+            [
+                Message(role="system", content="System\ninstructions 😀"),
+                Message(role="user", content="Analyze this trace"),
+            ]
+        )
+
+        self.assertEqual(response.content, "Muse result")
+        self.assertEqual(response.session_id, "session-1")
+        self.assertEqual(response.raw["model_id"], "muse-test-model")
+        mock_run.assert_called_once()
+        kwargs = mock_run.call_args.kwargs
+        self.assertEqual(kwargs["executable"], "muse")
+        self.assertEqual(kwargs["timeout"], 42)
+        self.assertEqual(kwargs["cwd"], "/tmp/trace dir")
+        self.assertTrue(kwargs["capture_output"])
+        self.assertTrue(kwargs["text"])
+        self.assertFalse(kwargs["check"])
+
+        args = kwargs["cmd_args"]
+        self.assertEqual(args[0], "exec")
+        self.assertIn("--json", args)
+        self.assertIn("--approval-mode", args)
+        self.assertIn("never", args)
+        self.assertIn("--no-session-log", args)
+        self.assertIn(model, args)
+        self.assertNotIn("-", args)
+
+        workspace_index = args.index("--workspace") + 1
+        self.assertEqual(args[workspace_index], "/tmp/trace dir")
+
+        # System and user prompts are merged into the prompt file.
+        self.assertEqual(len(seen_prompts), 1)
+        self.assertIn("System\ninstructions 😀", seen_prompts[0])
+        self.assertIn("Analyze this trace", seen_prompts[0])
+
+        # The prompt file is removed after the call.
+        self.assertEqual(len(prompt_paths), 1)
+        self.assertFalse(prompt_paths[0].exists())
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_omits_model_and_workspace_by_default(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=self._json_stdout("ok"), stderr=""
+        )
+
+        MuseClient().chat([Message(role="user", content="Analyze")])
+
+        args = mock_run.call_args.kwargs["cmd_args"]
+        self.assertNotIn("--model", args)
+        self.assertNotIn("--workspace", args)
+        self.assertIn("--prompt-file", args)
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_rejects_unsupported_message_shapes(self, mock_run):
+        invalid_messages = [
+            [],
+            [Message(role="system", content="System")],
+            [
+                Message(role="user", content="First"),
+                Message(role="user", content="Second"),
+            ],
+            [
+                Message(role="system", content="First"),
+                Message(role="system", content="Second"),
+                Message(role="user", content="Analyze"),
+            ],
+            [
+                Message(role="assistant", content="Prior response"),
+                Message(role="user", content="Analyze"),
+            ],
+            [
+                Message(role="tool", content="Tool result"),
+                Message(role="user", content="Analyze"),
+            ],
+        ]
+
+        for messages in invalid_messages:
+            with self.subTest(messages=messages):
+                with self.assertRaisesRegex(ValueError, "exactly one user message"):
+                    MuseClient().chat(messages)
+
+        mock_run.assert_not_called()
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_resolves_relative_cwd(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=self._json_stdout("ok"), stderr=""
+        )
+        expected_cwd = os.path.abspath("relative/trace/dir")
+
+        MuseClient(cwd="relative/trace/dir").chat(
+            [Message(role="user", content="Analyze")]
+        )
+
+        kwargs = mock_run.call_args.kwargs
+        self.assertEqual(kwargs["cwd"], expected_cwd)
+        args = kwargs["cmd_args"]
+        workspace_index = args.index("--workspace") + 1
+        self.assertEqual(args[workspace_index], expected_cwd)
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_does_not_retry_failure(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout="", stderr="boom"
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "boom"):
+            MuseClient(retry_count=3).chat([Message(role="user", content="Analyze")])
+
+        mock_run.assert_called_once()
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_cleans_prompt_file_after_timeout(self, mock_run):
+        prompt_paths = []
+
+        def time_out(**kwargs):
+            prompt_paths.append(self._prompt_path(kwargs["cmd_args"]))
+            raise subprocess.TimeoutExpired(cmd="muse", timeout=10)
+
+        mock_run.side_effect = time_out
+
+        with self.assertRaisesRegex(RuntimeError, "timed out after 10s"):
+            MuseClient(timeout=10).chat([Message(role="user", content="Analyze")])
+
+        self.assertEqual(len(prompt_paths), 1)
+        self.assertFalse(prompt_paths[0].exists())
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_rejects_empty_final_response(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=self._json_stdout(""), stderr=""
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "no final response"):
+            MuseClient().chat([Message(role="user", content="Analyze")])
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_rejects_terminal_failure(self, mock_run):
+        stdout = self._json_stdout("partial", terminal="failed")
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=stdout, stderr=""
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "terminal state 'failed'"):
+            MuseClient().chat([Message(role="user", content="Analyze")])
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_falls_back_to_deltas_without_terminal_event(self, mock_run):
+        deltas = "\n".join(
+            json.dumps({"payload_type": "run.output.delta", "payload": {"text": text}})
+            for text in ["Hello ", "world"]
+        )
+        stdout = f"not json\n\n{deltas}\n"
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=stdout, stderr=""
+        )
+
+        response = MuseClient().chat([Message(role="user", content="Analyze")])
+
+        self.assertEqual(response.content, "Hello world")
+        self.assertIsNone(response.session_id)
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_rejects_terminal_event_without_state(self, mock_run):
+        stdout = json.dumps({"payload_type": "run.terminal.error", "payload": {}})
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=stdout, stderr=""
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "terminal state"):
+            MuseClient().chat([Message(role="user", content="Analyze")])
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.run")
+    def test_chat_wraps_launch_failure(self, mock_run):
+        mock_run.side_effect = OSError("no such file")
+
+        with self.assertRaisesRegex(RuntimeError, "Failed to launch Muse CLI"):
+            MuseClient().chat([Message(role="user", content="Analyze")])
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.Popen")
+    def test_chat_stream_yields_deltas(self, mock_popen):
+        lines = [
+            json.dumps(
+                {"payload_type": "run.output.delta", "payload": {"text": "Hello "}}
+            ),
+            "not json",
+            "",
+            json.dumps(
+                {"payload_type": "run.output.delta", "payload": {"text": "world"}}
+            ),
+            json.dumps(
+                {
+                    "payload_type": "run.terminal.completed",
+                    "payload": {"terminal": "completed", "text": "Hello world"},
+                }
+            ),
+        ]
+        process = MagicMock()
+        process.stdout = iter(lines)
+        process.wait.return_value = 0
+        process.returncode = 0
+        mock_popen.return_value = process
+
+        chunks = list(
+            MuseClient().chat_stream([Message(role="user", content="Analyze")])
+        )
+
+        self.assertEqual(chunks, ["Hello ", "world"])
+        kwargs = mock_popen.call_args.kwargs
+        self.assertEqual(kwargs["executable"], "muse")
+        self.assertIn("--json", kwargs["cmd_args"])
+        self.assertNotIn("shell", kwargs)
+        prompt_index = kwargs["cmd_args"].index("--prompt-file") + 1
+        self.assertFalse(Path(kwargs["cmd_args"][prompt_index]).exists())
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.Popen")
+    def test_chat_stream_rejects_unsupported_message_shapes(self, mock_popen):
+        with self.assertRaisesRegex(ValueError, "exactly one user message"):
+            list(MuseClient().chat_stream([]))
+
+        mock_popen.assert_not_called()
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.Popen")
+    def test_chat_stream_raises_on_failure(self, mock_popen):
+        process = MagicMock()
+        process.stdout = iter([])
+        process.stderr.read.return_value = "boom"
+        process.wait.return_value = 1
+        process.returncode = 1
+        mock_popen.return_value = process
+
+        with self.assertRaisesRegex(RuntimeError, "boom"):
+            list(MuseClient().chat_stream([Message(role="user", content="Analyze")]))
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.Popen")
+    def test_chat_stream_kills_process_on_timeout(self, mock_popen):
+        process = MagicMock()
+        process.stdout = iter([])
+        process.wait.side_effect = [
+            subprocess.TimeoutExpired(cmd="muse", timeout=10),
+            0,
+        ]
+        mock_popen.return_value = process
+
+        with self.assertRaisesRegex(RuntimeError, "timed out after 10s"):
+            list(
+                MuseClient(timeout=10).chat_stream(
+                    [Message(role="user", content="Analyze")]
+                )
+            )
+
+        process.kill.assert_called_once()
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.Popen")
+    def test_chat_stream_rejects_terminal_failure(self, mock_popen):
+        lines = [
+            json.dumps(
+                {"payload_type": "run.output.delta", "payload": {"text": "partial"}}
+            ),
+            json.dumps(
+                {
+                    "payload_type": "run.terminal.failed",
+                    "payload": {"terminal": "failed", "reason": "kaput"},
+                }
+            ),
+        ]
+        process = MagicMock()
+        process.stdout = iter(lines)
+        process.wait.return_value = 0
+        process.returncode = 0
+        mock_popen.return_value = process
+
+        with self.assertRaisesRegex(RuntimeError, "terminal state 'failed'"):
+            list(MuseClient().chat_stream([Message(role="user", content="Analyze")]))
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.Popen")
+    def test_chat_stream_rejects_terminal_event_without_state(self, mock_popen):
+        lines = [
+            json.dumps({"payload_type": "run.terminal.error", "payload": {}}),
+        ]
+        process = MagicMock()
+        process.stdout = iter(lines)
+        process.wait.return_value = 0
+        process.returncode = 0
+        mock_popen.return_value = process
+
+        with self.assertRaisesRegex(RuntimeError, "terminal state"):
+            list(MuseClient().chat_stream([Message(role="user", content="Analyze")]))
+
+    @patch("tritonparse.ai.client.threading.Timer")
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.Popen")
+    def test_chat_stream_watchdog_kills_on_deadline(self, mock_popen, mock_timer_cls):
+        process = MagicMock()
+        process.stdout = iter([])
+        process.wait.return_value = 0
+        process.returncode = 0
+        process.poll.side_effect = [None, 0]
+        mock_popen.return_value = process
+
+        def fire_on_start(*args):
+            timer = MagicMock()
+            timer.start.side_effect = lambda: args[1]()
+            return timer
+
+        mock_timer_cls.side_effect = fire_on_start
+
+        with self.assertRaisesRegex(RuntimeError, "timed out"):
+            list(MuseClient().chat_stream([Message(role="user", content="Analyze")]))
+
+        process.kill.assert_called_once()
+
+    @patch("tritonparse.ai.client.TrustedSubprocessWithList.Popen")
+    def test_chat_stream_kills_process_when_abandoned(self, mock_popen):
+        process = MagicMock()
+        process.stdout = iter(
+            [
+                json.dumps(
+                    {
+                        "payload_type": "run.output.delta",
+                        "payload": {"text": "partial"},
+                    }
+                ),
+            ]
+        )
+        process.poll.return_value = None
+        mock_popen.return_value = process
+
+        stream = MuseClient().chat_stream([Message(role="user", content="Analyze")])
+        self.assertEqual(next(stream), "partial")
+        kwargs = mock_popen.call_args.kwargs
+        prompt_index = kwargs["cmd_args"].index("--prompt-file") + 1
+        prompt_path = Path(kwargs["cmd_args"][prompt_index])
+        stream.close()
+
+        process.kill.assert_called_once()
+        self.assertFalse(prompt_path.exists())
+
+    def test_build_prompt_without_system(self):
+        self.assertEqual(MuseClient._build_prompt("", "Analyze"), "Analyze")
+
+    def test_build_prompt_merges_system_and_user(self):
+        prompt = MuseClient._build_prompt("Be helpful", "Analyze")
+        self.assertIn("Be helpful", prompt)
+        self.assertIn("Analyze", prompt)
+        self.assertLess(prompt.index("Be helpful"), prompt.index("Analyze"))
 
 
 class TestClaudeCodeClient(unittest.TestCase):
@@ -379,5 +1016,55 @@ class TestClaudeCodeClient(unittest.TestCase):
         )
 
 
-if __name__ == "__main__":
-    unittest.main()
+class TestCreateLLMClient(unittest.TestCase):
+    """Tests for the create_llm_client factory."""
+
+    def test_defaults_to_claude(self):
+        """Test that the default provider is Claude."""
+        client = create_llm_client()
+        self.assertIsInstance(client, ClaudeCodeClient)
+
+    def test_creates_claude_client_with_options(self):
+        """Test Claude client creation with forwarded options."""
+        client = create_llm_client(
+            "claude",
+            model="sonnet",
+            timeout=42,
+            retry_count=2,
+            cwd="/tmp/work",
+            allowed_tools=["Read"],
+        )
+        self.assertIsInstance(client, ClaudeCodeClient)
+        self.assertEqual(client.model, "sonnet")
+        self.assertEqual(client.timeout, 42)
+        self.assertEqual(client.retry_count, 2)
+        self.assertEqual(client.cwd, "/tmp/work")
+        self.assertEqual(client.allowed_tools, ["Read"])
+
+    def test_creates_codex_client(self):
+        """Test Codex client creation with forwarded options."""
+        client = create_llm_client("codex", model="gpt-test", timeout=42, retry_count=2)
+        self.assertIsInstance(client, CodexClient)
+        self.assertEqual(client.model, "gpt-test")
+        self.assertEqual(client.timeout, 42)
+        self.assertEqual(client.retry_count, 2)
+
+    def test_creates_muse_client(self):
+        """Test Muse client creation with forwarded options."""
+        client = create_llm_client("muse", model="muse-test", timeout=42, retry_count=2)
+        self.assertIsInstance(client, MuseClient)
+        self.assertEqual(client.model, "muse-test")
+        self.assertEqual(client.timeout, 42)
+        self.assertEqual(client.retry_count, 2)
+
+    def test_allowed_tools_ignored_by_codex_and_muse(self):
+        """Test that allowed_tools doesn't break non-Claude providers."""
+        codex = create_llm_client("codex", allowed_tools=["Read"])
+        self.assertIsInstance(codex, CodexClient)
+        muse = create_llm_client("muse", allowed_tools=["Read"])
+        self.assertIsInstance(muse, MuseClient)
+
+    def test_rejects_unknown_provider(self):
+        """Test that an unknown provider raises ValueError."""
+        with self.assertRaisesRegex(ValueError, "Unknown LLM provider"):
+            create_llm_client("gemini")

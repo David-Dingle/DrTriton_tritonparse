@@ -9,12 +9,22 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from tritonparse._json_compat import dumps, JSONDecodeError, loads
 from tritonparse.backend import AnalyzerContext
+from tritonparse.kernel_filter import KernelPatterns
 from tritonparse.tools.compression import open_compressed_file
 from tritonparse.tp_logger import get_logger
 
-from .event_diff import _generate_autotune_analysis_events, _generate_launch_diff
+from .event_diff import (
+    _generate_autotune_analysis_events,
+    _generate_launch_diff,
+    summarize_oversized_strings,
+)
 from .ir_analysis import _generate_ir_analysis, _generate_launch_analysis
 from .ir_parser import _parse_generic_loc, extract_ptx_amdgcn_mappings
+from .kernel_selection import (
+    build_kernel_selection,
+    format_kernel_filter_no_match,
+    KernelFilterStats,
+)
 from .mapper import create_bidirectional_mapping, create_python_mapping
 from .sourcemap_utils import (
     _is_autotune_benchmark_launch,
@@ -692,7 +702,9 @@ def _determine_output_fname(
 
     frame_id = pt_info.get("frame_id")
     frame_compile_id = pt_info.get("frame_compile_id")
-    attempt_id = pt_info.get("attempt_id", 0)
+    # The writer emits this as "attempt", not "attempt_id" (see
+    # structured_logging: trace_data["pt_info"]["attempt"] = trace_id.attempt).
+    attempt = pt_info.get("attempt", 0)
     cai = pt_info.get("compiled_autograd_id", "-")
 
     # Try to resolve via mapping when pt_info is missing
@@ -702,7 +714,7 @@ def _determine_output_fname(
             if resolved is not None:
                 frame_id = resolved.frame_id
                 frame_compile_id = resolved.frame_compile_id
-                attempt_id = resolved.attempt
+                attempt = resolved.attempt
                 cai = (
                     resolved.compiled_autograd_id
                     if resolved.compiled_autograd_id is not None
@@ -710,7 +722,7 @@ def _determine_output_fname(
                 )
 
     if frame_id is not None or frame_compile_id is not None:
-        return f"f{frame_id}_fc{frame_compile_id}_a{attempt_id}_cai{cai}.ndjson"
+        return f"f{frame_id}_fc{frame_compile_id}_a{attempt}_cai{cai}.ndjson"
     else:
         return f"{file_name_without_extension}_mapped.ndjson"
 
@@ -721,7 +733,8 @@ def parse_single_rank(
     split_inductor_compilations: bool = True,
     kernel_compile_mapping: Optional[Dict[str, Any]] = None,
     procedure_checks: List[Dict[str, Any]] = None,
-):
+    kernel_patterns: Optional[KernelPatterns] = None,
+) -> Optional[KernelFilterStats]:
     """
     Process a list of trace files belonging to the same rank, merging events
     by kernel_hash across files (typically across PIDs for one rank).
@@ -745,15 +758,22 @@ def parse_single_rank(
             calling for deterministic output.
         output_dir: Directory to save output files. Required.
         split_inductor_compilations: Whether to split output files by
-            frame_id/compile_id/attempt_id/compiled_autograd_id (tlparse style).
+            frame_id/compile_id/attempt/compiled_autograd_id (tlparse style).
         kernel_compile_mapping: Optional mapping from kernel source path to
             CompileInfo, used to recover frame_id/compile_id when pt_info is
             missing.
         procedure_checks: List of procedure check configurations. None uses
             the bundled default checks.
+        kernel_patterns: Normalized fnmatch patterns. When set, process only
+            the complete hash/autotune-session closure selected by those names.
+
+    Returns:
+        Filter statistics when kernel_patterns is set; otherwise None.
     """
     if not file_paths:
-        return
+        if kernel_patterns is None:
+            return None
+        return build_kernel_selection([], kernel_patterns).stats(0)
 
     if procedure_checks is None:
         procedure_checks = get_procedure_checks()
@@ -761,12 +781,20 @@ def parse_single_rank(
     # =====================================================
     # Pass 1: Pre-scan all input files to identify kernels needing fake comps
     # =====================================================
-    compilation_hashes, first_launch_by_hash = _prescan_for_fake_compilations_multi(
-        file_paths
-    )
+    selection = None
+    if kernel_patterns is None:
+        compilation_hashes, first_launch_by_hash = _prescan_for_fake_compilations_multi(
+            file_paths
+        )
+    else:
+        selection = build_kernel_selection(file_paths, kernel_patterns)
+        compilation_hashes = selection.index.real_compilation_hashes
+        first_launch_by_hash = selection.index.fake_compilation_seed_by_hash
 
     # Identify kernel hashes that need fake compilations
     kernels_needing_fake = set(first_launch_by_hash.keys()) - compilation_hashes
+    if selection is not None:
+        kernels_needing_fake.intersection_update(selection.selected_hashes)
 
     # Create fake compilations
     fake_compilations: List[Dict[str, Any]] = []
@@ -791,9 +819,16 @@ def parse_single_rank(
             "launch_group_hashes": set(),
             "benchmark_occurrence_ids": [],
             "winner_occurrence_ids": [],
+            # Per-launch records so analysis can split one call-site session
+            # into per-autotune-key sub-sessions. Each entry maps an
+            # occurrence back to its launch group.
+            "launch_occurrences": [],
+            # One entry per AutotuneListener callback. A list (not a single
+            # dict) because repeated invocations at the same call site with
+            # different keys each emit their own result.
+            "autotune_results": [],
         }
     )
-    autotune_winners: Dict[str, str] = {}
     session_stacks: Dict[str, Any] = {}
     launch_by_group_hash: Dict[str, Dict[str, Any]] = {}
     next_occurrence_id: int = 0
@@ -855,6 +890,11 @@ def parse_single_rank(
                     kernel_hash = payload.get("metadata", {}).get("hash")
                     if not kernel_hash:
                         continue
+                    if (
+                        selection is not None
+                        and kernel_hash not in selection.selected_hashes
+                    ):
+                        continue
 
                     # Group autotune compilations by session_id (always, even
                     # when this hash already has a real compilation recorded —
@@ -897,15 +937,28 @@ def parse_single_rank(
                         "hash"
                     )
 
+                    stack = parsed_json.get("stack", [])
+                    session_id, user_stack = get_autotune_session_id(stack)
+                    if selection is not None:
+                        if kernel_hash:
+                            if kernel_hash not in selection.selected_hashes:
+                                continue
+                        elif (
+                            session_id is None
+                            or session_id not in selection.selected_sessions
+                        ):
+                            continue
+
                     launch_group_hash = compute_launch_event_hash(parsed_json)
+                    # Shrink after hashing, so group hashes stay byte-identical
+                    # to what the same trace produced before this guard.
+                    parsed_json = summarize_oversized_strings(parsed_json)
                     parsed_json["launch_group_hash"] = launch_group_hash
 
                     parsed_json["occurrence_id"] = next_occurrence_id
                     occurrence_id = next_occurrence_id
                     next_occurrence_id += 1
 
-                    stack = parsed_json.get("stack", [])
-                    session_id, user_stack = get_autotune_session_id(stack)
                     is_benchmark = _is_autotune_benchmark_launch(stack)
 
                     if session_id:
@@ -935,27 +988,40 @@ def parse_single_rank(
                             autotune_sessions[session_id][
                                 "winner_occurrence_ids"
                             ].append(occurrence_id)
+                        autotune_sessions[session_id]["launch_occurrences"].append(
+                            {
+                                "occurrence_id": occurrence_id,
+                                "launch_group_hash": launch_group_hash,
+                                "is_benchmark": is_benchmark,
+                            }
+                        )
 
                     if kernel_hash:
                         kernels_by_hash[kernel_hash]["launches"].append(
                             (parsed_json, global_launch_index)
                         )
-                        if not is_benchmark and session_id:
-                            autotune_winners[session_id] = launch_group_hash
                     global_launch_index += 1
 
                 elif event_type == "autotune":
                     stack = parsed_json.get("stack", [])
                     session_id, user_stack = get_autotune_session_id(stack)
+                    if selection is not None and (
+                        session_id is None
+                        or session_id not in selection.selected_sessions
+                    ):
+                        continue
                     if session_id:
-                        autotune_sessions[session_id]["autotune_result"] = {
-                            "best_config": parsed_json.get("best_config"),
-                            "configs_timings": parsed_json.get("configs_timings"),
-                            "duration": parsed_json.get("duration"),
-                            "cache_hit": parsed_json.get("cache_hit"),
-                            "cache_key": parsed_json.get("cache_key"),
-                            "kernel_name": parsed_json.get("kernel_name"),
-                        }
+                        autotune_sessions[session_id]["autotune_results"].append(
+                            {
+                                "best_config": parsed_json.get("best_config"),
+                                "configs_timings": parsed_json.get("configs_timings"),
+                                "duration": parsed_json.get("duration"),
+                                "cache_hit": parsed_json.get("cache_hit"),
+                                "cache_key": parsed_json.get("cache_key"),
+                                "kernel_name": parsed_json.get("kernel_name"),
+                                "autotune_key": parsed_json.get("autotune_key"),
+                            }
+                        )
                         if user_stack and session_id not in session_stacks:
                             session_stacks[session_id] = user_stack
 
@@ -1042,7 +1108,6 @@ def parse_single_rank(
 
     autotune_events_by_file = _generate_autotune_analysis_events(
         autotune_sessions,
-        autotune_winners,
         kernels_by_hash,
         session_stacks,
         launch_by_group_hash,
@@ -1061,6 +1126,13 @@ def parse_single_rank(
         with open(output_file, "w") as out:
             out.writelines(final_lines)
 
+    if selection is None:
+        return None
+    emitted_kernel_group_count = sum(
+        1 for data in kernels_by_hash.values() if data["output_file"]
+    )
+    return selection.stats(emitted_kernel_group_count)
+
 
 def parse_single_file(
     file_path: str,
@@ -1068,7 +1140,8 @@ def parse_single_file(
     split_inductor_compilations: bool = True,
     kernel_compile_mapping: Optional[Dict[str, Any]] = None,
     procedure_checks: List[Dict[str, Any]] = None,
-):
+    kernel_patterns: Optional[KernelPatterns] = None,
+) -> Optional[KernelFilterStats]:
     """
     Process a single trace file. Thin wrapper around parse_single_rank for
     backward compatibility — equivalent to a one-element batch.
@@ -1078,13 +1151,24 @@ def parse_single_file(
         output_dir: Directory for output files; defaults to file_path's dirname.
         split_inductor_compilations, kernel_compile_mapping, procedure_checks:
             same as parse_single_rank.
+        kernel_patterns: Normalized fnmatch patterns; same as parse_single_rank.
+
+    Returns:
+        Filter statistics when kernel_patterns is set; otherwise None.
+
+    Raises:
+        RuntimeError: If kernel_patterns selects no emitted kernel group.
     """
     if output_dir is None:
         output_dir = os.path.dirname(file_path)
-    parse_single_rank(
+    stats = parse_single_rank(
         [file_path],
         output_dir,
         split_inductor_compilations=split_inductor_compilations,
         kernel_compile_mapping=kernel_compile_mapping,
         procedure_checks=procedure_checks,
+        kernel_patterns=kernel_patterns,
     )
+    if stats is not None and stats.emitted_kernel_group_count == 0:
+        raise RuntimeError(format_kernel_filter_no_match(kernel_patterns, stats))
+    return stats

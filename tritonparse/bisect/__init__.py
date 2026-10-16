@@ -11,6 +11,7 @@ from tritonparse.bisect.commit_detector import (
     CommitDetector,
     CommitDetectorError,
     LLVMBumpInfo,
+    LLVMDescriptor,
 )
 from tritonparse.bisect.env_manager import EnvironmentManager
 from tritonparse.bisect.executor import CommandResult, ShellExecutor
@@ -22,6 +23,7 @@ from tritonparse.bisect.pair_tester import (
     PairTesterError,
     PairTestResult,
 )
+from tritonparse.bisect.result import BisectResult
 from tritonparse.bisect.state import BisectPhase, BisectState, StateManager
 from tritonparse.bisect.torch_bisector import TorchBisectError, TorchBisector
 from tritonparse.bisect.triton_bisector import TritonBisectError, TritonBisector
@@ -38,6 +40,7 @@ __all__ = [
     "BisectLogger",
     "BisectPhase",
     "BisectProgress",
+    "BisectResult",
     "BisectState",
     "BisectUI",
     "CommandResult",
@@ -48,6 +51,7 @@ __all__ = [
     "LLVMBisectError",
     "LLVMBisector",
     "LLVMBumpInfo",
+    "LLVMDescriptor",
     "PairTester",
     "PairTesterError",
     "PairTestResult",
